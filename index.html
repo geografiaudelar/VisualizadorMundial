@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Jugadores Históricos · La Celeste en los Mundiales</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="loader">
+  <div class="loader-spinner"></div>
+  <div class="loader-text">Cargando La Celeste...</div>
+</div>
+
+<header>
+  <img src="img/logo_facultad.png" alt="Facultad de Ciencias · UdelaR" class="header-logo">
+  <div class="header-div"></div>
+  <div class="header-text">
+    <span class="header-inst">Departamento de Geografía · Uruguay en los Mundiales</span>
+    <span class="header-title">Jugadores históricos de La Celeste · 1930–2022</span>
+  </div>
+  <div class="header-spacer"></div>
+  <div class="view-toggle">
+    <button class="view-btn active" id="btn-mapa">🗺 Mapa</button>
+    <button class="view-btn" id="btn-timeline">⏱ Línea de tiempo</button>
+    <button class="view-btn" id="btn-dashboard">📊 Dashboard</button>
+  </div>
+</header>
+
+<div class="main">
+
+  <!-- VISTA MAPA -->
+  <div id="view-mapa">
+    <div class="map-wrap">
+      <div id="map"></div>
+      <!-- INSET MAPA MONTEVIDEO -->
+      <div id="map-inset-wrap" class="map-inset-wrap">
+        <div class="map-inset-header">
+          <span class="map-inset-title">Montevideo · detalle</span>
+          <button id="btn-toggle-inset" class="map-inset-toggle" title="Ocultar">✕</button>
+        </div>
+        <div id="map-inset"></div>
+      </div>
+      <button id="btn-show-inset" class="map-inset-show hidden">🗺 Montevideo</button>
+      <div class="map-controls">
+        <div>
+          <div class="ctrl-title">Capas</div>
+          <label class="layer-row" style="margin-bottom:6px">
+            <input type="checkbox" id="toggle-heatmap">
+            <span class="toggle-track"></span>
+            <span class="dot-label"><span class="dot" style="background:linear-gradient(135deg,#55B5E5,#0a4a7a)"></span>Mapa de calor</span>
+          </label>
+          <label class="layer-row" style="margin-bottom:6px">
+            <input type="checkbox" id="toggle-markers" checked>
+            <span class="toggle-track"></span>
+            <span class="dot-label"><span class="dot" style="background:#55B5E5;border-radius:50%"></span>Jugadores UY</span>
+          </label>
+          <label class="layer-row" style="margin-bottom:6px">
+            <input type="checkbox" id="toggle-intl">
+            <span class="toggle-track"></span>
+            <span class="dot-label"><span class="dot" style="background:#f59e0b;border-radius:50%"></span>Nacidos fuera UY</span>
+          </label>
+          <label class="layer-row">
+            <input type="checkbox" id="toggle-coropeta">
+            <span class="toggle-track"></span>
+            <span class="dot-label"><span class="dot" style="background:linear-gradient(135deg,#cce8f5,#0a3a5a);border-radius:2px"></span>Coropleta deptos.</span>
+          </label>
+        </div>
+        <div>
+          <div class="ctrl-title">Filtrar por mundial</div>
+          <select id="filter-mundial" class="ctrl-select">
+            <option value="todos">Todos los mundiales</option>
+          </select>
+        </div>
+        <div id="status-map" class="status-map"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- VISTA TIMELINE -->
+  <div id="view-timeline" class="hidden">
+    <div class="timeline-wrap">
+      <div class="timeline-map-wrap">
+        <div id="map-timeline"></div>
+        <!-- INSET MONTEVIDEO TIMELINE -->
+        <div id="map-tl-inset-wrap" class="map-inset-wrap map-inset-tl">
+          <div class="map-inset-header">
+            <span class="map-inset-title">Montevideo · detalle</span>
+            <button id="btn-toggle-tl-inset" class="map-inset-toggle">✕</button>
+          </div>
+          <div id="map-tl-inset"></div>
+        </div>
+        <button id="btn-show-tl-inset" class="map-inset-show map-inset-show-tl hidden">🗺 Montevideo</button>
+        <!-- Barra cronológica inferior PERMANENTE -->
+        <div id="tl-birth-bar" class="tl-birth-bar">
+          <div class="tl-birth-controls">
+            <button id="tl-btn-play" class="tl-ctrl-btn active" title="Play">▶</button>
+            <button id="tl-btn-pause" class="tl-ctrl-btn" title="Pausa">⏸</button>
+            <button id="tl-btn-restart" class="tl-ctrl-btn" title="Reiniciar">↺</button>
+          </div>
+          <div class="tl-birth-bar-inner">
+            <div class="tl-birth-bar-title" id="tl-birth-title"></div>
+            <div class="tl-birth-timeline-wrap">
+              <div class="tl-birth-progress" id="tl-progress"></div>
+              <div class="tl-birth-timeline" id="tl-birth-dots"></div>
+            </div>
+            <div class="tl-birth-years">
+              <span id="tl-year-min"></span>
+              <span id="tl-year-max"></span>
+            </div>
+          </div>
+        </div>
+        <!-- Mini-card lateral -->
+        <div id="tl-mini-card" class="tl-mini-card"></div>
+      </div>
+      <div class="timeline-controls">
+        <div class="tl-header">
+          <div class="tl-title">Línea del tiempo · Mundiales</div>
+          <div class="tl-subtitle">Seleccioná un mundial para ver dónde nacieron sus jugadores</div>
+        </div>
+        <div class="tl-mundiales" id="tl-mundiales"></div>
+        <div class="tl-info" id="tl-info">
+          <div class="tl-info-placeholder">← Seleccioná un mundial para comenzar</div>
+        </div>
+        <div class="tl-player-list" id="tl-player-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- VISTA DASHBOARD -->
+  <div id="view-dashboard" class="hidden">
+    <div class="kpi-row">
+      <div class="kpi-card"><div class="kpi-label">Total jugadores</div><div class="kpi-value" id="kpi-total">–</div></div>
+      <div class="kpi-card"><div class="kpi-label">Mundiales jugados</div><div class="kpi-value" id="kpi-mundiales">14</div></div>
+      <div class="kpi-card"><div class="kpi-label">Depto. más representado</div><div class="kpi-value kpi-small" id="kpi-depto-top">–</div></div>
+      <div class="kpi-card"><div class="kpi-label">Nacidos fuera de UY</div><div class="kpi-value"><span id="kpi-extranacidos">–</span><span class="kpi-pct" id="kpi-extranacidos-pct"></span></div></div>
+      <div class="kpi-card"><div class="kpi-label">Campeones del mundo</div><div class="kpi-value" id="kpi-campeones">2</div></div>
+      <div class="kpi-card"><div class="kpi-label">Más mundiales (jugador)</div><div class="kpi-value kpi-small" id="kpi-mas-mundiales">–</div></div>
+    </div>
+    <div class="chart-row row2">
+      <div class="chart-card">
+        <div class="chart-card-title">Jugadores por mundial</div>
+        <div class="chart-wrap"><canvas id="chart-por-mundial"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-card-title">Posiciones más frecuentes</div>
+        <div class="chart-wrap"><canvas id="chart-posiciones"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-card-title">Departamentos de nacimiento</div>
+        <div class="chart-wrap"><canvas id="chart-deptos"></canvas></div>
+      </div>
+    </div>
+    <div class="chart-row row3">
+      <div class="chart-card">
+        <div class="chart-card-title">Clubes más representados</div>
+        <div class="chart-wrap"><canvas id="chart-clubes"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-card-title">Países donde jugaban al momento del mundial</div>
+        <div class="chart-wrap"><canvas id="chart-paises-clubes"></canvas></div>
+      </div>
+      <div class="chart-card proyecciones-card">
+        <div class="chart-card-title">Proyecciones 2030 ⚽</div>
+        <div class="proyecciones-placeholder">
+          <div class="proy-icon">🏆</div>
+          <div class="proy-titulo">Análisis en construcción</div>
+          <div class="proy-texto">El Mundial 2030 se jugará en España, Portugal, Marruecos, Argentina, Uruguay y Paraguay. Este espacio está reservado para proyecciones sobre el plantel uruguayo, distribución geográfica estimada y tendencias de formación.</div>
+          <div class="proy-badge">Próximamente</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+<script src="main.js"></script>
+</body>
+</html>
