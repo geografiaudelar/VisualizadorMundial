@@ -296,54 +296,67 @@ header{
   }
 
   /* ── Vistas: flujo normal en mobile ── */
-  #view-mapa,
   #view-timeline,
   #view-dashboard,
   #view-proy {
     position: relative;
     inset: unset;
   }
+  /* Mapa: altura completa disponible para que el mapa llene la pantalla */
+  #view-mapa {
+    position: fixed;
+    inset: var(--header-h) 0 0 0;
+    display: flex;
+    flex-direction: column;
+  }
+  #view-mapa.hidden { display: none; }
 
   /* ── MAPA ── */
-  #view-mapa { display: flex; flex-direction: column; }
-  /* Contenedor con altura explícita igual que el mapa de proyección */
-  .map-wrap {
-    height: 80vh;
-    min-height: 500px;
-    flex: none;
-    position: relative;
+  /* En mobile: columna invertida — controles arriba, mapa abajo limpio */
+  #view-mapa {
+    display: flex;
+    flex-direction: column;
   }
-  #map { position: absolute; inset: 0; width: 100%; height: 100%; }
-
+  /* Los controles salen del mapa y se ponen ANTES del map-wrap */
   .map-controls {
-    position: relative;
-    top: unset; right: unset;
+    position: relative !important;
+    top: unset !important; right: unset !important;
+    order: -1;                /* aparece antes del mapa */
     width: 100%;
     border-radius: 0;
-    border-left: none; border-right: none;
-    border-top: 1px solid var(--border);
+    border: none;
+    border-bottom: 1px solid var(--border);
     flex-direction: column;
     gap: 10px;
     min-width: unset;
-    padding: 12px 14px;
+    padding: 12px 14px 14px;
     background: var(--surface);
     box-shadow: none;
     max-height: none;
     overflow: visible;
+    z-index: auto;
   }
   .map-controls > div { width: 100%; }
   .ctrl-title { font-size: 9px; margin-bottom: 6px; }
-  .ctrl-select { width: 100%; font-size: 12px; padding: 6px 8px; height: 36px; }
-  /* Capas en fila */
+  .ctrl-select { width: 100%; font-size: 13px; padding: 7px 10px; height: 38px; }
+  /* Capas en grilla 2 columnas */
   .map-controls > div:first-child {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 6px 12px;
+    gap: 7px 14px;
   }
   .map-controls > div:first-child .ctrl-title {
     grid-column: 1 / -1;
-    margin-bottom: 0;
+    margin-bottom: 2px;
   }
+  /* Mapa ocupa todo el espacio restante, sin nada encima */
+  .map-wrap {
+    flex: 1;
+    min-height: 52vh;
+    position: relative;
+    order: 1;
+  }
+  #map { position: absolute; inset: 0; width: 100%; height: 100%; }
 
   /* ── TIMELINE ── */
   .timeline-wrap { flex-direction: column; height: auto; }
