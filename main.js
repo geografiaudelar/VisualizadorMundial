@@ -217,7 +217,10 @@ function initVistas() {
         }, 200);
       }
       if (viewId === 'view-dashboard') renderDashboard();
-      if (viewId === 'view-proy')      renderProyeccion2030();
+      if (viewId === 'view-proy') {
+        renderProyeccion2030();
+        if (mapProy) setTimeout(() => mapProy.invalidateSize(), 300);
+      }
     });
   });
 }
