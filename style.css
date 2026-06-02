@@ -308,9 +308,9 @@ header{
   #view-mapa { display: flex; flex-direction: column; }
   /* Contenedor con altura explícita igual que el mapa de proyección */
   .map-wrap {
-    height: 75vw;
-    min-height: 320px;
-    max-height: 480px;
+    height: 55vh;
+    min-height: 380px;
+    max-height: 560px;
     flex: none;
     position: relative;
   }
@@ -349,9 +349,9 @@ header{
   /* ── TIMELINE ── */
   .timeline-wrap { flex-direction: column; height: auto; }
   .timeline-map-wrap {
-    height: 75vw;
-    min-height: 320px;
-    max-height: 480px;
+    height: 48vh;
+    min-height: 340px;
+    max-height: 500px;
     position: relative;
     flex: none;
   }
