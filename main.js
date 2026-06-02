@@ -207,10 +207,16 @@ function initVistas() {
         const el = document.getElementById(v);
         if (el) el.classList.toggle('hidden', v !== viewId);
       });
-      if (viewId === 'view-mapa'     && mapMain)     setTimeout(() => mapMain.invalidateSize(), 120);
+      if (viewId === 'view-mapa' && mapMain) {
+        setTimeout(() => mapMain.invalidateSize(), 50);
+        setTimeout(() => mapMain.invalidateSize(), 200);
+        setTimeout(() => mapMain.invalidateSize(), 500);
+      }
       if (viewId === 'view-timeline' && mapTimeline) {
         setTimeout(() => {
           mapTimeline.invalidateSize();
+          setTimeout(() => mapTimeline.invalidateSize(), 300);
+          setTimeout(() => mapTimeline.invalidateSize(), 600);
           if (tlAnimJugadores.length === 0 && tlSorted.length > 0) {
             prepararAnimacion(tlSorted); tlPlay();
           }
@@ -227,7 +233,13 @@ function initVistas() {
 
 /* ── MAPA PRINCIPAL ─────────────────────────────────────── */
 function initMapaPrincipal() {
-  mapMain = L.map('map', { center: [-32.5, -56.0], zoom: 7, zoomControl: true });
+  const isMobile = window.innerWidth < 768;
+  mapMain = L.map('map', {
+    center: isMobile ? [-32.8, -56.0] : [-32.5, -56.0],
+    zoom: isMobile ? 6 : 7,
+    zoomControl: true,
+    scrollWheelZoom: !isMobile
+  });
   L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
     attribution: '&copy; OpenStreetMap &amp; CARTO', subdomains: 'abcd', maxZoom: 18
   }).addTo(mapMain);
@@ -467,7 +479,12 @@ let tlDotEls = [];
 let tlMiniTimeout = null;
 
 function initTimelineMap() {
-  mapTimeline = L.map('map-timeline', { center: [-32.5, -56.0], zoom: 7 });
+  const isMobileTL = window.innerWidth < 768;
+  mapTimeline = L.map('map-timeline', {
+    center: isMobileTL ? [-32.8, -56.0] : [-32.5, -56.0],
+    zoom: isMobileTL ? 6 : 7,
+    scrollWheelZoom: !isMobileTL
+  });
   L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
     attribution:'', subdomains:'abcd', maxZoom:18
   }).addTo(mapTimeline);
@@ -768,13 +785,13 @@ function renderChartPaisesClubes(jugs) {
 
    Paso 1 — Prior (lo que sabemos antes de ver los últimos mundiales):
      El GeoJSON tiene el recuento exacto por departamento y por mundial
-     para todos los torneos 1930-2022. Dividimos entre la población del
+     para todos los torneos 1930-2026. Dividimos entre la población del
      departamento en el censo más cercano a cada mundial para obtener
      una tasa "jugadores por 100.000 hab." por depto y mundial.
-     El prior es la media de esas tasas históricas (1930-2022).
+     El prior es la media de esas tasas históricas (1930-2026).
 
    Paso 2 — Likelihood (señal reciente):
-     Tomamos solo los últimos 5 mundiales (2002-2022), que son
+     Tomamos solo los últimos 6 mundiales (2002-2026), que son
      más informativos para 2030 porque reflejan el sistema de
      formación actual. Calculamos la misma tasa per-cápita reciente.
 
@@ -854,7 +871,7 @@ function renderProyeccion2030() {
     });
     const tasaPrior = cntPrior ? sumPrior / cntPrior : 0;
 
-    // Likelihood: tasa reciente (2002-2022)
+    // Verosimilitud: tasa reciente (2002-2026)
     let sumLike = 0, cntLike = 0;
     MUNDIALES_RECIENTES.forEach(mundial => {
       const jugadores = typeof props[`Mund_${mundial}`] === 'number' ? props[`Mund_${mundial}`] : 0;
@@ -919,8 +936,8 @@ function renderProyeccion2030() {
     <b>¿Por qué un modelo bayesiano?</b> En estadística bayesiana, el estimador
     de un parámetro desconocido (aquí: la tasa de producción de mundialistas
     de cada departamento) combina dos fuentes de información mediante la regla
-    de Bayes: el <b>conocimiento previo</b> (información histórica acumulada 1930&ndash;2022)
-    y la <b>verosimilitud observada</b> (señal empírica reciente, 2002&ndash;2022).
+    de Bayes: el <b>conocimiento previo</b> (información histórica acumulada 1930&ndash;2026)
+    y la <b>verosimilitud observada</b> (señal empírica reciente, 2002&ndash;2026).
     Usar sólo el promedio histórico daría demasiado peso a décadas muy distintas
     al fútbol actual; usar sólo los datos recientes introduce alta varianza
     (pocos torneos). Bayes equilibra ambas fuentes de forma principiada.
@@ -939,7 +956,7 @@ function renderProyeccion2030() {
     </div>
 
     <b>Verosimilitud observada — 60%.</b>
-    Idéntico cálculo restringido a los mundiales 2002&ndash;2022,
+    Idéntico cálculo restringido a los mundiales 2002&ndash;2026,
     que reflejan el sistema formativo actual. El mayor peso (60 vs 40) expresa
     que la señal reciente es más informativa para 2030.
 
@@ -978,7 +995,7 @@ function renderProyeccion2030() {
       true);
     const el1v = document.getElementById('f1v');
     if (el1v) el1v.innerHTML = 'donde <span id="ia1"></span> (peso al conocimiento previo histórico), ' +
-      '<span id="ia2"></span> es la tasa media histórica 1930&ndash;2022 y ' +
+      '<span id="ia2"></span> es la tasa media histórica 1930&ndash;2026 y ' +
       '<span id="ia3"></span> es la tasa media de los últimos 5 mundiales.';
     katex.render('\\alpha = 0{,}40', document.getElementById('ia1'), {throwOnError:false});
     katex.render('\\bar{\\theta}_{d,\\mathrm{hist}}', document.getElementById('ia2'), {throwOnError:false});

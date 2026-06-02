@@ -306,8 +306,15 @@ header{
 
   /* ── MAPA ── */
   #view-mapa { display: flex; flex-direction: column; }
-  .map-wrap { height: 58vmax; flex: none; position: relative; }
-  #map { position: absolute; inset: 0; }
+  /* Contenedor con altura explícita igual que el mapa de proyección */
+  .map-wrap {
+    height: 75vw;
+    min-height: 320px;
+    max-height: 480px;
+    flex: none;
+    position: relative;
+  }
+  #map { position: absolute; inset: 0; width: 100%; height: 100%; }
 
   .map-controls {
     position: relative;
@@ -341,8 +348,15 @@ header{
 
   /* ── TIMELINE ── */
   .timeline-wrap { flex-direction: column; height: auto; }
-  .timeline-map-wrap { height: 52vmax; position: relative; min-height: 280px; }
-  #map-timeline { position: absolute; inset: 0; }
+  .timeline-map-wrap {
+    height: 75vw;
+    min-height: 320px;
+    max-height: 480px;
+    position: relative;
+    flex: none;
+  }
+  /* El mapa ocupa todo el contenedor menos la barra de nacimientos */
+  #map-timeline { position: absolute; top: 0; left: 0; right: 0; bottom: 0; }
   .timeline-controls {
     width: 100%;
     border-left: none;
