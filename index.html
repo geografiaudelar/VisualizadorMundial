@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Jugadores Históricos · La Celeste en los Mundiales</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -13,15 +13,6 @@
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"
   onload="renderMathInElement(document.body, {delimiters:[{left:'\\[',right:'\\]',display:true},{left:'\\(',right:'\\)',display:false}]})"></script>
-<style>
-/* Prevent double-tap zoom on buttons */
-.view-btn, .tl-ctrl-btn, .tl-mundial-btn, .proy-lbl-toggle { touch-action: manipulation; }
-/* Safe area for notched phones */
-@supports (padding: env(safe-area-inset-bottom)) {
-  header { padding-top: max(8px, env(safe-area-inset-top)); }
-  .main  { padding-bottom: env(safe-area-inset-bottom); }
-}
-</style>
 </head>
 <body>
 
@@ -50,46 +41,46 @@
 
   <!-- VISTA MAPA -->
   <div id="view-mapa">
+    <div class="map-controls">
+      <div>
+        <div class="ctrl-title">Capas</div>
+        <label class="layer-row" style="margin-bottom:6px">
+          <input type="checkbox" id="toggle-heatmap">
+          <span class="toggle-track"></span>
+          <span class="dot-label"><span class="dot" style="background:linear-gradient(135deg,#55B5E5,#0a4a7a)"></span>Mapa de calor</span>
+        </label>
+        <label class="layer-row" style="margin-bottom:6px">
+          <input type="checkbox" id="toggle-markers" checked>
+          <span class="toggle-track"></span>
+          <span class="dot-label"><span class="dot" style="background:#55B5E5;border-radius:50%"></span>Jugadores UY</span>
+        </label>
+        <label class="layer-row" style="margin-bottom:6px">
+          <input type="checkbox" id="toggle-intl">
+          <span class="toggle-track"></span>
+          <span class="dot-label"><span class="dot" style="background:#f59e0b;border-radius:50%"></span>Nacidos fuera UY</span>
+        </label>
+        <label class="layer-row">
+          <input type="checkbox" id="toggle-coropeta">
+          <span class="toggle-track"></span>
+          <span class="dot-label"><span class="dot" style="background:linear-gradient(135deg,#cce8f5,#0a3a5a);border-radius:2px"></span>Por departamento</span>
+        </label>
+      </div>
+      <div>
+        <div class="ctrl-title">Filtrar por mundial</div>
+        <select id="filter-mundial" class="ctrl-select">
+          <option value="todos">Todos los mundiales</option>
+        </select>
+      </div>
+      <div>
+        <div class="ctrl-title">Filtrar por posición</div>
+        <select id="filter-posicion" class="ctrl-select">
+          <option value="todas">Todas las posiciones</option>
+        </select>
+      </div>
+      <div id="status-map" class="status-map"></div>
+    </div>
     <div class="map-wrap">
       <div id="map"></div>
-      <div class="map-controls">
-        <div>
-          <div class="ctrl-title">Capas</div>
-          <label class="layer-row" style="margin-bottom:6px">
-            <input type="checkbox" id="toggle-heatmap">
-            <span class="toggle-track"></span>
-            <span class="dot-label"><span class="dot" style="background:linear-gradient(135deg,#55B5E5,#0a4a7a)"></span>Mapa de calor</span>
-          </label>
-          <label class="layer-row" style="margin-bottom:6px">
-            <input type="checkbox" id="toggle-markers" checked>
-            <span class="toggle-track"></span>
-            <span class="dot-label"><span class="dot" style="background:#55B5E5;border-radius:50%"></span>Jugadores UY</span>
-          </label>
-          <label class="layer-row" style="margin-bottom:6px">
-            <input type="checkbox" id="toggle-intl">
-            <span class="toggle-track"></span>
-            <span class="dot-label"><span class="dot" style="background:#f59e0b;border-radius:50%"></span>Nacidos fuera UY</span>
-          </label>
-          <label class="layer-row">
-            <input type="checkbox" id="toggle-coropeta">
-            <span class="toggle-track"></span>
-            <span class="dot-label"><span class="dot" style="background:linear-gradient(135deg,#cce8f5,#0a3a5a);border-radius:2px"></span>Por departamento</span>
-          </label>
-        </div>
-        <div>
-          <div class="ctrl-title">Filtrar por mundial</div>
-          <select id="filter-mundial" class="ctrl-select">
-            <option value="todos">Todos los mundiales</option>
-          </select>
-        </div>
-        <div>
-          <div class="ctrl-title">Filtrar por posición</div>
-          <select id="filter-posicion" class="ctrl-select">
-            <option value="todas">Todas las posiciones</option>
-          </select>
-        </div>
-        <div id="status-map" class="status-map"></div>
-      </div>
     </div>
   </div>
 

@@ -54,7 +54,6 @@ header{
 #view-mapa.hidden{display:none}
 .map-wrap{flex:1;position:relative}
 #map{position:absolute;inset:0}
-
 .map-controls{
   position:absolute;top:10px;right:10px;z-index:500;
   background:rgba(255,255,255,.97);border:1px solid var(--border);
@@ -275,27 +274,13 @@ header{
   .header-logo { height: 38px; }
   .header-div  { display: none; }
   .header-text { flex: 1; min-width: 0; }
-  .header-inst  { font-size: 8px; letter-spacing: .06em; }
+  .header-inst  { font-size: 8px; }
   .header-title { font-size: 11px; line-height: 1.3; }
   .header-spacer { display: none; }
-  .view-toggle {
-    order: 10;
-    width: 100%;
-    justify-content: stretch;
-    gap: 3px;
-    background: rgba(255,255,255,.06);
-    padding: 3px;
-  }
-  .view-btn {
-    flex: 1;
-    padding: 5px 4px;
-    font-size: 9.5px;
-    gap: 3px;
-    justify-content: center;
-    text-align: center;
-  }
+  .view-toggle { order: 10; width: 100%; justify-content: stretch; gap: 3px; padding: 3px; }
+  .view-btn { flex: 1; padding: 5px 2px; font-size: 9.5px; justify-content: center; text-align: center; }
 
-  /* ── Todas las vistas: flujo normal en mobile ── */
+  /* ── Todas las vistas: flujo normal ── */
   #view-mapa,
   #view-timeline,
   #view-dashboard,
@@ -304,12 +289,13 @@ header{
     inset: unset;
   }
 
-  /* ── MAPA ── */
+  /* ── MAPA ──
+     map-controls es hermano ANTERIOR de map-wrap en el HTML,
+     por eso fluye arriba y el mapa queda abajo limpio */
   #view-mapa { display: flex; flex-direction: column; }
 
-  /* Controles FUERA del mapa: posición estática, encima del map-wrap */
   .map-controls {
-    position: relative !important;
+    position: static !important;
     top: unset !important;
     right: unset !important;
     width: 100%;
@@ -322,6 +308,7 @@ header{
     padding: 12px 14px;
     background: var(--surface);
     box-shadow: none;
+    backdrop-filter: none;
     z-index: 1;
   }
   .map-controls > div { width: 100%; }
@@ -334,10 +321,9 @@ header{
   }
   .map-controls > div:first-child .ctrl-title { grid-column: 1 / -1; }
 
-  /* Mapa: altura fija, igual que timeline, completamente limpio */
   .map-wrap {
-    height: 50vh;
-    min-height: 340px;
+    height: 55vh;
+    min-height: 320px;
     flex: none;
     position: relative;
   }
@@ -347,13 +333,11 @@ header{
   .timeline-wrap { flex-direction: column; height: auto; }
   .timeline-map-wrap {
     height: 48vh;
-    min-height: 340px;
-    max-height: 500px;
+    min-height: 300px;
     position: relative;
     flex: none;
   }
-  /* El mapa ocupa todo el contenedor menos la barra de nacimientos */
-  #map-timeline { position: absolute; top: 0; left: 0; right: 0; bottom: 0; }
+  #map-timeline { position: absolute; inset: 0; }
   .timeline-controls {
     width: 100%;
     border-left: none;
@@ -362,16 +346,10 @@ header{
     overflow-y: visible;
     padding: 12px;
   }
-  .tl-mundiales {
-    max-height: none;
-    flex-direction: row;
-    flex-wrap: wrap;
-    gap: 5px;
-  }
+  .tl-mundiales { max-height: none; flex-direction: row; flex-wrap: wrap; gap: 5px; }
   .tl-mundial-btn { width: calc(50% - 3px); font-size: 10px; }
   .tl-birth-bar { bottom: 0; padding: 6px 10px 8px; }
   .tl-birth-controls { flex-direction: row; gap: 4px; }
-  .tl-ctrl-btn { width: 26px; height: 26px; font-size: 10px; }
   .tl-mini-card { right: 8px; bottom: 72px; width: 150px; }
 
   /* ── DASHBOARD ── */
@@ -390,47 +368,21 @@ header{
   .chart-row.row2,
   .chart-row.row3 { grid-template-columns: 1fr; gap: 8px; }
   .chart-card { min-height: 240px; padding: 12px; }
-  .chart-card-title { font-size: 9.5px; }
 
   /* ── PROYECCIÓN 2030 ── */
-  #view-proy {
-    position: relative;
-    inset: unset;
-    overflow-y: visible;
-    padding: var(--gap);
-  }
+  #view-proy { overflow-y: visible; padding: var(--gap); }
   .proy-outer { gap: 14px; }
-  .proy-section-header { gap: 8px; }
   .proy-section-title { font-size: 14px; line-height: 1.3; }
   .proy-section-intro { font-size: 12px; padding: 10px 12px; }
-  .proy-section-sub { font-size: 10px; }
-  /* Mapa arriba, tabla abajo */
-  .proy-body {
-    grid-template-columns: 1fr;
-    gap: 14px;
-  }
-  .proy-map-col { width: 100%; }
+  .proy-body { grid-template-columns: 1fr; gap: 14px; }
   .proy-leaflet-map { height: 70vw; min-height: 280px; max-height: 380px; }
-  .proy-map-title-row { margin-bottom: 6px; }
-  .proy-table-col { width: 100%; }
-  /* Tabla scrollable horizontal en mobile */
-  .proy-table-wrap {
-    max-height: none;
-    overflow-x: auto;
-    overflow-y: visible;
-    -webkit-overflow-scrolling: touch;
-  }
+  .proy-table-wrap { max-height: none; overflow-x: auto; -webkit-overflow-scrolling: touch; }
   .proy-table { font-size: 11px; min-width: 420px; }
   .proy-table th { font-size: 9px; padding: 6px 6px; }
   .proy-table td { padding: 5px 6px; }
-  /* Ocultar columna de score bar en mobile, mostrar sólo número */
   .proy-score-bar { display: none; }
   .proy-est-val { font-size: 12px; }
-  .proy-method { padding: 10px; }
-  .proy-method-body { font-size: 10px; }
-  /* Fórmulas: scroll horizontal si no caben */
-  .proy-formula-block { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-  .proy-formula { font-size: 12px; min-width: 300px; }
+  .proy-formula-block { overflow-x: auto; }
 }
 
 /* ── TABLET (768 – 1024px) ─────────────────────────────── */
@@ -442,8 +394,6 @@ header{
   .chart-row.row2,
   .chart-row.row3 { grid-template-columns: 1fr 1fr; }
   .timeline-controls { width: 260px; }
-  .proy-body { grid-template-columns: 240px 1fr; }
-  .proy-leaflet-map { height: 320px; }
 }
 
 /* =========================================================
