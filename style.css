@@ -308,9 +308,8 @@ header{
   #view-mapa { display: flex; flex-direction: column; }
   /* Contenedor con altura explícita igual que el mapa de proyección */
   .map-wrap {
-    height: 55vh;
-    min-height: 380px;
-    max-height: 560px;
+    height: 80vh;
+    min-height: 500px;
     flex: none;
     position: relative;
   }

@@ -235,8 +235,8 @@ function initVistas() {
 function initMapaPrincipal() {
   const isMobile = window.innerWidth < 768;
   mapMain = L.map('map', {
-    center: isMobile ? [-32.8, -56.0] : [-32.5, -56.0],
-    zoom: isMobile ? 6 : 7,
+    center: isMobile ? [-33.0, -56.0] : [-32.5, -56.0],
+    zoom: isMobile ? 5 : 7,
     zoomControl: true,
     scrollWheelZoom: !isMobile
   });
