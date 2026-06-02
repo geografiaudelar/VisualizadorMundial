@@ -9,6 +9,10 @@
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"
+  onload="renderMathInElement(document.body, {delimiters:[{left:'\\[',right:'\\]',display:true},{left:'\\(',right:'\\)',display:false}]})"></script>
 </head>
 <body>
 
@@ -22,13 +26,14 @@
   <div class="header-div"></div>
   <div class="header-text">
     <span class="header-inst">Departamento de Geografía · Uruguay en los Mundiales</span>
-    <span class="header-title">Jugadores históricos de La Celeste · 1930–2022</span>
+    <span class="header-title">Geografía de los mundialistas uruguayos · 96 años de raíces territoriales 1930–2026</span>
   </div>
   <div class="header-spacer"></div>
   <div class="view-toggle">
     <button class="view-btn active" id="btn-mapa">🗺 Mapa</button>
     <button class="view-btn" id="btn-timeline">⏱ Línea de tiempo</button>
     <button class="view-btn" id="btn-dashboard">📊 Dashboard</button>
+    <button class="view-btn" id="btn-proy">⚽ Proyección 2030</button>
   </div>
 </header>
 
@@ -38,15 +43,6 @@
   <div id="view-mapa">
     <div class="map-wrap">
       <div id="map"></div>
-      <!-- INSET MAPA MONTEVIDEO -->
-      <div id="map-inset-wrap" class="map-inset-wrap">
-        <div class="map-inset-header">
-          <span class="map-inset-title">Montevideo · detalle</span>
-          <button id="btn-toggle-inset" class="map-inset-toggle" title="Ocultar">✕</button>
-        </div>
-        <div id="map-inset"></div>
-      </div>
-      <button id="btn-show-inset" class="map-inset-show hidden">🗺 Montevideo</button>
       <div class="map-controls">
         <div>
           <div class="ctrl-title">Capas</div>
@@ -68,13 +64,19 @@
           <label class="layer-row">
             <input type="checkbox" id="toggle-coropeta">
             <span class="toggle-track"></span>
-            <span class="dot-label"><span class="dot" style="background:linear-gradient(135deg,#cce8f5,#0a3a5a);border-radius:2px"></span>Coropleta deptos.</span>
+            <span class="dot-label"><span class="dot" style="background:linear-gradient(135deg,#cce8f5,#0a3a5a);border-radius:2px"></span>Por departamento</span>
           </label>
         </div>
         <div>
           <div class="ctrl-title">Filtrar por mundial</div>
           <select id="filter-mundial" class="ctrl-select">
             <option value="todos">Todos los mundiales</option>
+          </select>
+        </div>
+        <div>
+          <div class="ctrl-title">Filtrar por posición</div>
+          <select id="filter-posicion" class="ctrl-select">
+            <option value="todas">Todas las posiciones</option>
           </select>
         </div>
         <div id="status-map" class="status-map"></div>
@@ -87,15 +89,6 @@
     <div class="timeline-wrap">
       <div class="timeline-map-wrap">
         <div id="map-timeline"></div>
-        <!-- INSET MONTEVIDEO TIMELINE -->
-        <div id="map-tl-inset-wrap" class="map-inset-wrap map-inset-tl">
-          <div class="map-inset-header">
-            <span class="map-inset-title">Montevideo · detalle</span>
-            <button id="btn-toggle-tl-inset" class="map-inset-toggle">✕</button>
-          </div>
-          <div id="map-tl-inset"></div>
-        </div>
-        <button id="btn-show-tl-inset" class="map-inset-show map-inset-show-tl hidden">🗺 Montevideo</button>
         <!-- Barra cronológica inferior PERMANENTE -->
         <div id="tl-birth-bar" class="tl-birth-bar">
           <div class="tl-birth-controls">
@@ -132,7 +125,8 @@
     </div>
   </div>
 
-  <!-- VISTA DASHBOARD -->
+  <!-- VISTA DASHBOARD: dos zonas -->
+  <!-- Zona fija: KPIs + filtros + gráficos -->
   <div id="view-dashboard" class="hidden">
     <div class="kpi-row">
       <div class="kpi-card"><div class="kpi-label">Total jugadores</div><div class="kpi-value" id="kpi-total">–</div></div>
@@ -141,6 +135,15 @@
       <div class="kpi-card"><div class="kpi-label">Nacidos fuera de UY</div><div class="kpi-value"><span id="kpi-extranacidos">–</span><span class="kpi-pct" id="kpi-extranacidos-pct"></span></div></div>
       <div class="kpi-card"><div class="kpi-label">Campeones del mundo</div><div class="kpi-value" id="kpi-campeones">2</div></div>
       <div class="kpi-card"><div class="kpi-label">Más mundiales (jugador)</div><div class="kpi-value kpi-small" id="kpi-mas-mundiales">–</div></div>
+    </div>
+    <div class="dash-filters">
+      <div class="dash-filter-label">Filtrar gráficos:</div>
+      <select id="dash-filter-mundial" class="ctrl-select dash-filter-sel">
+        <option value="todos">Todos los mundiales</option>
+      </select>
+      <select id="dash-filter-posicion" class="ctrl-select dash-filter-sel">
+        <option value="todas">Todas las posiciones</option>
+      </select>
     </div>
     <div class="chart-row row2">
       <div class="chart-card">
@@ -165,13 +168,46 @@
         <div class="chart-card-title">Países donde jugaban al momento del mundial</div>
         <div class="chart-wrap"><canvas id="chart-paises-clubes"></canvas></div>
       </div>
-      <div class="chart-card proyecciones-card">
-        <div class="chart-card-title">Proyecciones 2030 ⚽</div>
-        <div class="proyecciones-placeholder">
-          <div class="proy-icon">🏆</div>
-          <div class="proy-titulo">Análisis en construcción</div>
-          <div class="proy-texto">El Mundial 2030 se jugará en España, Portugal, Marruecos, Argentina, Uruguay y Paraguay. Este espacio está reservado para proyecciones sobre el plantel uruguayo, distribución geográfica estimada y tendencias de formación.</div>
-          <div class="proy-badge">Próximamente</div>
+    </div>
+  </div>
+
+  <!-- Zona separada: Proyección 2030 — siempre debajo del dashboard, scroll propio -->
+  <div id="view-proy" class="hidden">
+    <div class="proy-outer">
+      <div class="proy-section-header">
+        <div class="proy-section-title">⚽ Proyección 2030 · ¿De dónde vendrán los mundialistas?</div>
+        <div class="proy-section-intro">
+          Este análisis busca estimar de dónde podrían venir los jugadores del próximo plantel mundialista uruguayo. Para cada jugador histórico se toma su ciudad de nacimiento y se analiza la tendencia de crecimiento de esa ciudad usando los censos disponibles, proyectándola hasta 2030. Con eso se calcula cuántos mundialistas salieron por cada 100.000 habitantes en cada departamento, dándole más peso a los últimos mundiales, que se parecen más al fútbol de 2030. El resultado distribuye los 26 lugares del plantel entre los departamentos según esa probabilidad histórica ajustada por población.
+        </div>
+        <div class="proy-section-sub">Técnicamente: modelo de Bayes empírico con conocimiento previo histórico (1930-2026, 40%) y verosimilitud observada reciente (2002-2026, 60%), tasas normalizadas por población proyectada por localidad desde <code>evolucion_pob.csv</code>. Datos del mundial 2026 incluidos.</div>
+      </div>
+      <div class="proy-body">
+        <div class="proy-map-col">
+          <div class="proy-map-title-row">
+            <span class="proy-map-title">Probabilidad relativa por departamento</span>
+            <label class="proy-lbl-toggle">
+              <input type="checkbox" id="proy-toggle-labels" checked>
+              <span>Etiquetas</span>
+            </label>
+          </div>
+          <div id="proy-map-leaflet" class="proy-leaflet-map"></div>
+          <div class="proy-legend">
+            <div class="proy-legend-grad"></div>
+            <div class="proy-legend-labels"><span>Menor prob.</span><span>Mayor prob.</span></div>
+          </div>
+        </div>
+        <div class="proy-table-col">
+          <div class="proy-table-title">Estimación · Plantel 26 jugadores</div>
+          <div class="proy-table-wrap">
+            <table class="proy-table" id="proy-table">
+              <thead><tr><th>Departamento</th><th>Hist. (1930-2026)</th><th>Hist. reciente (2002-2026)</th><th>Pob. 2030 est.</th><th>Score bayesiano</th><th>Jugadores est.</th></tr></thead>
+              <tbody id="proy-tbody"></tbody>
+            </table>
+          </div>
+          <div class="proy-method">
+            <div class="proy-method-title">Por qué Bayes y cómo se aplica</div>
+            <div class="proy-method-body" id="proy-method-text"></div>
+          </div>
         </div>
       </div>
     </div>
