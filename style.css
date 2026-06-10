@@ -611,3 +611,10 @@ header{
 
 .proy-label-icon{background:none!important;border:none!important;overflow:visible!important}
 .leaflet-div-icon.proy-label-icon{background:none;border:none;overflow:visible}
+/* ── Proyección: tasa por 100k ──────────────────────────── */
+.rate-cell { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--accent-xdk); }
+.rate-sep  { color: var(--border); }
+.rate-rec  { font-size: 10px; color: var(--muted); }
+
+/* Coropleta label con porcentaje */
+.coropeta-lbl { line-height: 1.3; }

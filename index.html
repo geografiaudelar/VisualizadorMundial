@@ -179,7 +179,7 @@
         <div class="proy-section-intro">
           Este análisis busca estimar de dónde podrían venir los jugadores del próximo plantel mundialista uruguayo. Para cada jugador histórico se toma su ciudad de nacimiento y se analiza la tendencia de crecimiento de esa ciudad usando los censos disponibles, proyectándola hasta 2030. Con eso se calcula cuántos mundialistas salieron por cada 100.000 habitantes en cada departamento, dándole más peso a los últimos mundiales, que se parecen más al fútbol de 2030. El resultado distribuye los 26 lugares del plantel entre los departamentos según esa probabilidad histórica ajustada por población.
         </div>
-        <div class="proy-section-sub">Técnicamente: modelo de Bayes empírico con conocimiento previo histórico (1930-2026, 40%) y verosimilitud observada reciente (2002-2026, 60%), tasas normalizadas por población proyectada por localidad desde <code>evolucion_pob.csv</code>. Datos del mundial 2026 incluidos.</div>
+        <div class="proy-section-sub">Tasas de jugadores por 100.000 hab. por departamento (censo INE más cercano a cada mundial). Se pondera más el período reciente (2002-2026) que el histórico completo (1930-2026). Población 2030 según proyecciones INE 2025. Resultado: 1 extranjero + Montevideo (16) + Canelones (3) + Salto (2) + Artigas, Colonia, Paysandú, Río Negro (1 c/u).</div>
       </div>
       <div class="proy-body">
         <div class="proy-map-col">
@@ -200,12 +200,12 @@
           <div class="proy-table-title">Estimación · Plantel 26 jugadores</div>
           <div class="proy-table-wrap">
             <table class="proy-table" id="proy-table">
-              <thead><tr><th>Departamento</th><th>Hist. (1930-2026)</th><th>Hist. reciente (2002-2026)</th><th>Pob. 2030 est.</th><th>Score bayesiano</th><th>Jugadores est.</th></tr></thead>
+              <thead><tr><th>Departamento</th><th>Jug./100k hab. <span style="font-weight:400;opacity:.7">hist. / rec.</span></th><th>Prob. modelo</th><th>Pob. 2030 est.</th><th>Score ponderado</th><th>Jugadores est.</th></tr></thead>
               <tbody id="proy-tbody"></tbody>
             </table>
           </div>
           <div class="proy-method">
-            <div class="proy-method-title">Por qué Bayes y cómo se aplica</div>
+            <div class="proy-method-title">Cómo se calculó esta proyección</div>
             <div class="proy-method-body" id="proy-method-text"></div>
           </div>
         </div>

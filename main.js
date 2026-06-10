@@ -1,5 +1,6 @@
 /* ==========================================================
    main.js — La Celeste en los Mundiales · UdelaR
+   Versión optimizada: carga rápida, proyección desde CSV
    ========================================================== */
 
 const CAMPEONES = [1930, 1950];
@@ -10,9 +11,31 @@ const SEDES = {
   2002:"Corea/Japón", 2010:"Sudáfrica", 2014:"Brasil",
   2018:"Rusia", 2022:"Catar", 2026:"EE.UU./Can./Méx."
 };
-// Mundiales en el GeoJSON (propiedades Mund_XXXX)
 const MUNDIALES_GEOJSON = [1930,1950,1954,1966,1970,1974,1986,1990,2002,2010,2014,2018,2022,2026];
 const MUNDIALES_RECIENTES = [2002,2010,2014,2018,2022,2026];
+/* ── Tasas históricas por 100.000 hab por depto (del xlsx Prop100K_hab) ── */
+const RATES_100K = {
+  "Artigas":        { avg_all: 1.981, avg_rec: 1.286 },
+  "Canelones":      { avg_all: 0.659, avg_rec: 0.505 },
+  "Cerro Largo":    { avg_all: 1.408, avg_rec: 0     },
+  "Colonia":        { avg_all: 1.458, avg_rec: 1.701 },
+  "Durazno":        { avg_all: 2.582, avg_rec: 1.752 },
+  "Flores":         { avg_all: 0,     avg_rec: 0     },
+  "Florida":        { avg_all: 1.490, avg_rec: 0     },
+  "Lavalleja":      { avg_all: 1.671, avg_rec: 1.671 },
+  "Maldonado":      { avg_all: 2.035, avg_rec: 0.939 },
+  "Montevideo":     { avg_all: 1.243, avg_rec: 0.821 },
+  "Paysandú":       { avg_all: 1.590, avg_rec: 1.736 },
+  "Río Negro":      { avg_all: 2.558, avg_rec: 2.663 },
+  "Rivera":         { avg_all: 1.575, avg_rec: 0.915 },
+  "Rocha":          { avg_all: 1.580, avg_rec: 0     },
+  "Salto":          { avg_all: 1.534, avg_rec: 1.537 },
+  "San José":       { avg_all: 1.219, avg_rec: 0     },
+  "Soriano":        { avg_all: 2.191, avg_rec: 0     },
+  "Tacuarembó":     { avg_all: 1.736, avg_rec: 1.105 },
+  "Treinta y Tres": { avg_all: 2.155, avg_rec: 2.028 }
+};
+
 
 /* ── Seeded PRNG ─────────────────────────────────────────── */
 function makeRng(seed) {
@@ -50,10 +73,26 @@ function applyJitter(jugadores) {
   });
 }
 
+
+/* ── Sanitizar texto para uso seguro en innerHTML ────────── */
+function esc(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+/* Encodear URL para uso en atributos href/src ─────────────── */
+function safeUrl(url) {
+  if (!url) return '';
+  try { return encodeURI(decodeURI(url)); } catch(e) { return encodeURI(url); }
+}
 /* ── Estado global ─────────────────────────────────────── */
 let JUGADORES = [];
 let MUNDIALES = [];
-let POB_LOCALIDADES = {};   // { "Departamento": [ {ciudad, serie:[{año,pob},...]} ] }
+let PROY_DATA = [];          // datos de proyecciones2030.csv (Germán)
 let mapMain = null, mapTimeline = null, mapProy = null;
 let heatLayer = null, markerLayerMain = null, markerLayerIntl = null;
 let tlMarkersAll = [];
@@ -61,47 +100,86 @@ let coropetaLayer = null, coropetaLabelLayer = null, coropetaVisible = false;
 let chartInstances = {};
 let tlSorted = [];
 
-/* ── CARGA DE DATOS ─────────────────────────────────────── */
-window.addEventListener('DOMContentLoaded', () => {
-  // Cargar CSV de jugadores
-  const p1 = new Promise((res, rej) => {
-    Papa.parse('data/uruguay_jugadores_mundial.csv', {
-      download:true, header:true, skipEmptyLines:true,
-      complete: r => res(r.data),
-      error: rej
-    });
-  });
-  // Cargar CSV de población
-  const p2 = new Promise((res, rej) => {
-    Papa.parse('data/evolucion_pob.csv', {
-      download:true, header:true, skipEmptyLines:true,
-      complete: r => res(r.data),
-      error: rej
-    });
-  });
-  // Cargar GeoJSON
-  const p3 = fetch('data/jugadores_dptos_mundial_wgs84.geojson').then(r => r.json());
+/* ── Paths de datos — busca en varias rutas para compatibilidad ── */
+const DATA_PATHS = ['data/', './data/', ''];
 
-  Promise.all([p1, p2, p3]).then(([csvJug, csvPob, gj]) => {
+async function fetchWithFallback(filename) {
+  for (const prefix of DATA_PATHS) {
+    try {
+      const resp = await fetch(prefix + filename);
+      if (resp.ok) return resp;
+    } catch(e) { /* siguiente */ }
+  }
+  throw new Error(`No se pudo cargar ${filename}`);
+}
+
+/* ── CARGA DE DATOS — paralela y con fallback ─────────────── */
+window.addEventListener('DOMContentLoaded', () => {
+  const pJug = new Promise((res, rej) => {
+    // Fetch como ArrayBuffer y decodificar como UTF-8 para preservar tildes y caracteres especiales
+    const tryFetch = async (paths) => {
+      for (const prefix of paths) {
+        try {
+          const resp = await fetch(prefix + 'uruguay_jugadores_mundial.csv');
+          if (!resp.ok) continue;
+          const buf = await resp.arrayBuffer();
+          // Detectar encoding: probar UTF-8, si tiene caracteres de reemplazo (latin-1 mal leído) usar windows-1252
+          let text = new TextDecoder('utf-8').decode(buf);
+          if (text.includes('\uFFFD')) {
+            text = new TextDecoder('windows-1252').decode(buf);
+          }
+          const parsed = Papa.parse(text, { header: true, skipEmptyLines: true });
+          if (parsed.data && parsed.data.length > 0) { res(parsed.data); return; }
+        } catch(e) { /* siguiente path */ }
+      }
+      rej(new Error('No se pudo cargar jugadores CSV'));
+    };
+    tryFetch(DATA_PATHS);
+  });
+
+  const pProy = new Promise((res, rej) => {
+    const tryFetch = async (paths) => {
+      for (const prefix of paths) {
+        try {
+          const resp = await fetch(prefix + 'proyecciones2030.csv');
+          if (!resp.ok) continue;
+          const buf = await resp.arrayBuffer();
+          const text = new TextDecoder('utf-8').decode(buf);
+          const parsed = Papa.parse(text, { header: true, skipEmptyLines: true });
+          if (parsed.data && parsed.data.length > 0) { res(parsed.data); return; }
+        } catch(e) { /* siguiente path */ }
+      }
+      rej(new Error('No se pudo cargar proyecciones CSV'));
+    };
+    tryFetch(DATA_PATHS);
+  });
+
+  const pGeo = fetchWithFallback('jugadores_dptos_mundial_wgs84.geojson').then(r => r.json());
+
+  Promise.all([pJug, pProy, pGeo]).then(([csvJug, csvProy, gj]) => {
     JUGADORES = applyJitter(parseCSV(csvJug));
     MUNDIALES = [...new Set(JUGADORES.flatMap(j => j.m))].sort((a,b)=>a-b);
     tlSorted = [...JUGADORES].filter(j => j.fechaIso).sort((a,b) => a.fechaIso - b.fechaIso);
-    POB_LOCALIDADES = parsePobCSV(csvPob);
+    PROY_DATA = parseProy(csvProy);
     window.DEPTOS_GEOJSON = gj;
     initApp();
   }).catch(err => {
     console.error('Error cargando datos:', err);
-    document.getElementById('loader').classList.add('hidden');
+    document.getElementById('loader').innerHTML =
+      `<div style="color:#f87171;font-family:DM Mono,monospace;font-size:12px;text-align:center;padding:20px">
+        Error cargando datos.<br><small>${err.message}</small>
+      </div>`;
   });
 });
 
 function parseCSV(rows) {
   return rows.map(r => {
-    const mundiales = r.lista_mundiales.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
-    const clubes    = r.clubes_en_mundiales.split(',').map(s => s.trim());
-    const paises    = r.paises_clubes.split(',').map(s => s.trim());
+    const mundiales = (r.lista_mundiales || '').split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
+    const clubes    = (r.clubes_en_mundiales || '').split(',').map(s => s.trim());
+    const paises    = (r.paises_clubes || '').split(',').map(s => s.trim());
     const la = parseFloat(r.Latitud);
     const lo = parseFloat(r.Longitud);
+    if (isNaN(la) || isNaN(lo)) return null;
     let fechaIso = null;
     if (r.fecha_iso) {
       const parts = r.fecha_iso.split('/');
@@ -120,61 +198,29 @@ function parseCSV(rows) {
       lu, de: depto, pa: r.pais_nacimiento, la, lo,
       fo: r.url_imagen || null, desplazado: false
     };
-  });
+  }).filter(Boolean);
 }
 
-/* Parsear evolucion_pob.csv
-   Retorna { "Artigas": [{ciudad:"Artigas", serie:[{año:1963,pob:23429},...]}], ... }
-*/
-function parsePobCSV(rows) {
-  const AÑOS_CENSO = [1963,1975,1985,1996,2004,2011,2023];
-  const result = {};
-  rows.forEach(r => {
-    const ciudad = (r['Ciudad / Localidad'] || '').trim();
-    const depto  = (r['Departamento'] || '').trim();
-    if (!depto) return;
-    const serie = AÑOS_CENSO.map(a => {
-      const v = parseFloat(r[String(a)]);
-      return isNaN(v) ? null : { año: a, pob: v };
-    }).filter(Boolean);
-    if (serie.length < 2) return; // necesitamos al menos 2 puntos para tendencia
-    if (!result[depto]) result[depto] = [];
-    result[depto].push({ ciudad, serie });
-  });
-  return result;
-}
-
-/* ── Regresión lineal simple ────────────────────────────── */
-function linearRegression(xs, ys) {
-  const n = xs.length;
-  const xm = xs.reduce((a,b)=>a+b,0)/n;
-  const ym = ys.reduce((a,b)=>a+b,0)/n;
-  const num = xs.reduce((s,x,i)=>s+(x-xm)*(ys[i]-ym),0);
-  const den = xs.reduce((s,x)=>s+(x-xm)**2,0);
-  const slope = den ? num/den : 0;
-  return { slope, intercept: ym - slope*xm };
-}
-
-/* Proyectar población de una localidad al año target */
-function proyLocalidad(serie, targetAño) {
-  const xs = serie.map(p => p.año);
-  const ys = serie.map(p => p.pob);
-  const { slope, intercept } = linearRegression(xs, ys);
-  const proj = slope * targetAño + intercept;
-  // no puede ser menor que el 80% del último dato conocido
-  const lastKnown = ys[ys.length-1];
-  return Math.max(proj, lastKnown * 0.80);
-}
-
-/* Proyección poblacional total 2030 por departamento
-   Suma las proyecciones individuales de cada localidad del CSV */
-function proyPob2030PorDepto() {
-  const result = {};
-  Object.entries(POB_LOCALIDADES).forEach(([depto, localidades]) => {
-    const total = localidades.reduce((sum, loc) => sum + proyLocalidad(loc.serie, 2030), 0);
-    result[depto] = total;
-  });
-  return result;
+/* Parsear proyecciones2030.csv (resultados de Germán) */
+function parseProy(rows) {
+  return rows
+    .filter(r => r.Dpto && r.Dpto !== 'Extranjeros')
+    .map(r => {
+      const nm = r.Dpto.trim();
+      const rates = RATES_100K[nm] || { avg_all: 0, avg_rec: 0 };
+      return {
+        nm,
+        pobProy:     parseFloat(r.Pob2030) || 0,
+        prob:        parseFloat(r.prob_2030) || 0,
+        probBinom:   parseFloat(r.prob_2030_binom) || 0,
+        propComb:    parseFloat(r.prop_2030_comb) || 0,
+        cant:        parseFloat(r.cant) || 0,
+        cantCorreg:  parseInt(r.cant_correg) || 0,
+        rate100k:    rates.avg_all,
+        rate100kRec: rates.avg_rec
+      };
+    })
+    .sort((a,b) => b.cantCorreg - a.cantCorreg || b.cant - a.cant);
 }
 
 /* ── INICIALIZACIÓN ─────────────────────────────────────── */
@@ -186,16 +232,14 @@ function initApp() {
   poblarFiltroMundial();
   poblarFiltroPosicion();
   poblarTimeline();
-  // Forzar invalidateSize después de que el DOM se pinte completamente
-  setTimeout(() => {
-    if (mapMain) mapMain.invalidateSize();
-    if (mapTimeline) mapTimeline.invalidateSize();
-    document.getElementById('loader').classList.add('hidden');
-  }, 300);
-  setTimeout(() => {
-    if (mapMain) mapMain.invalidateSize();
-    if (mapTimeline) mapTimeline.invalidateSize();
-  }, 800);
+  requestAnimationFrame(() => {
+    setTimeout(() => {
+      if (mapMain) mapMain.invalidateSize();
+      if (mapTimeline) mapTimeline.invalidateSize();
+      const loader = document.getElementById('loader');
+      if (loader) { loader.style.opacity = '0'; setTimeout(() => loader.classList.add('hidden'), 400); }
+    }, 200);
+  });
 }
 
 /* ── VISTAS ──────────────────────────────────────────────── */
@@ -238,7 +282,8 @@ function initMapaPrincipal() {
     center: isMobile ? [-33.7, -56.0] : [-32.5, -56.0],
     zoom: isMobile ? 6 : 7,
     zoomControl: true,
-    scrollWheelZoom: !isMobile
+    scrollWheelZoom: !isMobile,
+    preferCanvas: true   // más rápido para muchos markers
   });
   L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
     attribution: '&copy; OpenStreetMap &amp; CARTO', subdomains: 'abcd', maxZoom: 18
@@ -259,7 +304,10 @@ function initMapaPrincipal() {
   document.getElementById('toggle-coropeta').addEventListener('change', e => {
     coropetaVisible = e.target.checked;
     if (coropetaVisible) buildCoropeta(getFiltroMundial(), getFiltroPosicion());
-    else { if (coropetaLayer) mapMain.removeLayer(coropetaLayer); if (coropetaLabelLayer) mapMain.removeLayer(coropetaLabelLayer); }
+    else {
+      if (coropetaLayer) mapMain.removeLayer(coropetaLayer);
+      if (coropetaLabelLayer) mapMain.removeLayer(coropetaLabelLayer);
+    }
   });
   document.getElementById('filter-mundial').addEventListener('change', rebuildMapaDesdeControles);
   document.getElementById('filter-posicion').addEventListener('change', rebuildMapaDesdeControles);
@@ -312,7 +360,14 @@ function buildMarkersMain(filtroMundial, filtroPosicion) {
   jugs.forEach(j => {
     const isIntl = j.pa !== 'Uruguay';
     const marker = L.marker([j.la, j.lo], { icon: buildBallIcon(j, isIntl) });
-    marker.bindPopup(buildFichaPopup(j), { maxWidth: 280, minWidth: 260, className: 'ficha-popup' });
+    // Popup cargado de forma lazy al primer click
+    marker.on('click', function() {
+      if (!this._popupBuilt) {
+        this.bindPopup(buildFichaPopup(j), { maxWidth: 280, minWidth: 260, className: 'ficha-popup' });
+        this._popupBuilt = true;
+        this.openPopup();
+      }
+    });
     if (isIntl) markerLayerIntl.addLayer(marker);
     else markerLayerMain.addLayer(marker);
   });
@@ -337,18 +392,20 @@ function buildFichaPopup(j) {
   }).join('');
   const clubes = j.m.map((año,i) => {
     const club = j.cl[Math.min(i, j.cl.length-1)];
-    return `<span class="popup-club-item"><span class="popup-club-año">${año}</span> ${club}</span>`;
+    return `<span class="popup-club-item"><span class="popup-club-año">${año}</span> ${esc(club)}</span>`;
   }).join('');
-  const wiki  = j.wiki ? `<a href="${j.wiki}" target="_blank" class="popup-wiki-btn">🔗 Wikipedia / AUF</a>` : '';
+  const wiki  = j.wiki ? `<a href="${safeUrl(j.wiki)}" target="_blank" class="popup-wiki-btn">🔗 Wikipedia / AUF</a>` : '';
   const coord = j.desplazado ? `<div class="popup-coord-note">📌 Coord. estimada, basada sólo en lugar de nacimiento</div>` : '';
-  const foto  = j.fo ? `<img class="popup-foto" src="${j.fo}" alt="" onerror="this.style.display='none'">` : `<div class="popup-foto popup-foto-empty">⚽</div>`;
+  const foto  = j.fo
+    ? `<img class="popup-foto" src="${safeUrl(j.fo)}" loading="lazy" alt="" onerror="this.style.display='none'">`
+    : `<div class="popup-foto popup-foto-empty">⚽</div>`;
   return `<div class="popup-ficha">
     <div class="popup-ficha-top">${foto}
       <div class="popup-ficha-info">
-        <div class="popup-nombre">${j.n}</div>
-        <div class="popup-pos-badge">${j.pos}</div>
-        <div class="popup-lugar">${j.lu}${j.de?', '+j.de:''}${j.pa!=='Uruguay'?' · '+j.pa:''}</div>
-        <div class="popup-fn">${j.fn}</div>
+        <div class="popup-nombre">${esc(j.n)}</div>
+        <div class="popup-pos-badge">${esc(j.pos)}</div>
+        <div class="popup-lugar">${esc(j.lu)}${j.de?', '+esc(j.de):''}${j.pa!=='Uruguay'?' · '+esc(j.pa):''}</div>
+        <div class="popup-fn">${esc(j.fn)}</div>
       </div>
     </div>
     <div class="popup-mundiales-row">${pills}</div>
@@ -363,12 +420,14 @@ function poblarFiltroMundial() {
   ['filter-mundial', 'dash-filter-mundial'].forEach(id => {
     const sel = document.getElementById(id);
     if (!sel) return;
+    const frag = document.createDocumentFragment();
     MUNDIALES.forEach(año => {
       const opt = document.createElement('option');
       opt.value = año;
       opt.textContent = `${año} · ${SEDES[año]||''}`;
-      sel.appendChild(opt);
+      frag.appendChild(opt);
     });
+    sel.appendChild(frag);
   });
 }
 function poblarFiltroPosicion() {
@@ -376,17 +435,18 @@ function poblarFiltroPosicion() {
   ['filter-posicion', 'dash-filter-posicion'].forEach(id => {
     const sel = document.getElementById(id);
     if (!sel) return;
+    const frag = document.createDocumentFragment();
     posiciones.forEach(pos => {
       const opt = document.createElement('option');
       opt.value = pos; opt.textContent = pos;
-      sel.appendChild(opt);
+      frag.appendChild(opt);
     });
+    sel.appendChild(frag);
   });
 }
 
-/* ── COROPLETA — usa propiedades Mund_XXXX del GeoJSON ──── */
+/* ── COROPLETA ──────────────────────────────────────────── */
 function getCoropetaVal(props, mundial, posicion) {
-  // Si hay filtro de posición, contamos desde JUGADORES (el GeoJSON no tiene esa granularidad)
   if (posicion && posicion !== 'todas') {
     const nombre = (props.nam || '').toLowerCase();
     return JUGADORES.filter(j =>
@@ -396,7 +456,6 @@ function getCoropetaVal(props, mundial, posicion) {
       (!mundial || j.m.includes(mundial))
     ).length;
   }
-  // Sin filtro de posición: usa los datos precalculados del GeoJSON
   if (!mundial) {
     return MUNDIALES_GEOJSON.reduce((s,a) => {
       const v = props[`Mund_${a}`];
@@ -432,15 +491,18 @@ function buildCoropeta(mundial, posicion) {
     onEachFeature: (feat, layer) => {
       const v = getCoropetaVal(feat.properties, mundial, pos);
       const nm = feat.properties.nam || '';
+      const totalJugs = mundial
+        ? (JUGADORES.filter(j => j.pa === 'Uruguay' && j.m.includes(mundial)).length || 1)
+        : (JUGADORES.filter(j => j.pa === 'Uruguay').length || 1);
+      const pct = totalJugs > 0 ? (v / totalJugs * 100).toFixed(1) : '0.0';
       layer.bindTooltip(
-        `<b>${nm}</b><br>${v} jugador${v!==1?'es':''}${mundial?' · '+mundial:' · total'}`,
+        `<b>${nm}</b><br>${v} jugador${v!==1?'es':''} (${pct}%)${mundial?' · '+mundial:' · total'}`,
         { sticky: true }
       );
     }
   });
   if (coropetaVisible) {
     coropetaLayer.addTo(mapMain);
-    // Etiquetas de conteo sobre cada polígono
     if (coropetaLabelLayer) mapMain.removeLayer(coropetaLabelLayer);
     coropetaLabelLayer = L.layerGroup();
     DEPTOS_GEOJSON.features
@@ -455,10 +517,14 @@ function buildCoropeta(mundial, posicion) {
         );
         const cx = best.reduce((s,c)=>s+c[0],0)/best.length;
         const cy = best.reduce((s,c)=>s+c[1],0)/best.length;
+        const totalJ = mundial
+          ? (JUGADORES.filter(j => j.pa === 'Uruguay' && j.m.includes(mundial)).length || 1)
+          : (JUGADORES.filter(j => j.pa === 'Uruguay').length || 1);
+        const pctLbl = (v / totalJ * 100).toFixed(1) + '%';
         L.marker([cy, cx], {
           icon: L.divIcon({
             className: 'proy-label-icon',
-            html: `<div class="coropeta-lbl">${v}</div>`,
+            html: `<div class="coropeta-lbl">${v}<br><span style="font-size:8px;opacity:.75">${pctLbl}</span></div>`,
             iconSize: null,
             iconAnchor: null
           })
@@ -483,7 +549,8 @@ function initTimelineMap() {
   mapTimeline = L.map('map-timeline', {
     center: [-33.0, -54.3],
     zoom: isMobileTL ? 6 : 7,
-    scrollWheelZoom: !isMobileTL
+    scrollWheelZoom: !isMobileTL,
+    preferCanvas: true
   });
   L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
     attribution:'', subdomains:'abcd', maxZoom:18
@@ -492,6 +559,7 @@ function initTimelineMap() {
 
 function poblarTimeline() {
   const cont = document.getElementById('tl-mundiales');
+  const frag = document.createDocumentFragment();
   MUNDIALES.forEach(año => {
     const n = JUGADORES.filter(j => j.m.includes(año)).length;
     const esCampeon = CAMPEONES.includes(año);
@@ -503,8 +571,9 @@ function poblarTimeline() {
       <span class="tl-mundial-sede">${SEDES[año]||''}${esCampeon?' 🏆':''}</span>
       <span class="tl-mundial-count">${n}</span>`;
     btn.addEventListener('click', () => seleccionarMundialTimeline(año));
-    cont.appendChild(btn);
+    frag.appendChild(btn);
   });
+  cont.appendChild(frag);
   document.getElementById('tl-btn-play').addEventListener('click', tlPlay);
   document.getElementById('tl-btn-pause').addEventListener('click', tlPause);
   document.getElementById('tl-btn-restart').addEventListener('click', tlRestart);
@@ -532,24 +601,26 @@ function seleccionarMundialTimeline(año) {
     </div>
     ${esCampeon ? `<div class="tl-campeon-badge">🏆 Uruguay campeón</div>` : ''}`;
   const lista = document.getElementById('tl-player-list');
-  lista.innerHTML = '';
+  const frag = document.createDocumentFragment();
   [...jugs].sort((a,b)=>(a.fechaIso||0)-(b.fechaIso||0)).forEach(j => {
     const item = document.createElement('div');
     item.className = 'tl-player-item';
     item.dataset.nombre = j.n;
     item.innerHTML = `
-      ${j.fo?`<img class="tl-player-foto" src="${j.fo}" onerror="this.src=''" alt="">`:'<div class="tl-player-foto"></div>'}
+      ${j.fo?`<img class="tl-player-foto" src="${safeUrl(j.fo)}" loading="lazy" onerror="this.src=''" alt="">`:'<div class="tl-player-foto"></div>'}
       <div class="tl-player-info">
-        <div class="tl-player-nombre">${j.n}</div>
-        <div class="tl-player-pos">${j.pos}</div>
+        <div class="tl-player-nombre">${esc(j.n)}</div>
+        <div class="tl-player-pos">${esc(j.pos)}</div>
       </div>
-      <span class="tl-player-depto">${j.de||j.pa}</span>`;
+      <span class="tl-player-depto">${esc(j.de||j.pa)}</span>`;
     item.addEventListener('click', () => {
       const mk = tlMarkersAll.find(m => m._jugador && m._jugador.n === j.n);
       if (mk) { mapTimeline.setView(mk.getLatLng(), 10); mk.openPopup(); }
     });
-    lista.appendChild(item);
+    frag.appendChild(item);
   });
+  lista.innerHTML = '';
+  lista.appendChild(frag);
   const jugsTL = [...jugs].filter(j=>j.fechaIso).sort((a,b)=>a.fechaIso-b.fechaIso);
   prepararAnimacion(jugsTL); tlPlay();
   const ptsUY = jugs.filter(j=>j.pa==='Uruguay');
@@ -577,6 +648,7 @@ function prepararAnimacion(jugadores) {
   document.getElementById('tl-year-max').textContent = jugadores[jugadores.length-1].fechaIso.getFullYear();
   document.getElementById('tl-birth-title').textContent = `${jugadores.length} jugadores ordenados por nacimiento`;
   document.getElementById('tl-progress').style.width = '0%';
+  const frag = document.createDocumentFragment();
   jugadores.forEach((j, i) => {
     const pct = ((j.fechaIso.getTime() - minD) / range * 88 + 6).toFixed(2);
     const dot = document.createElement('div');
@@ -588,9 +660,10 @@ function prepararAnimacion(jugadores) {
       const mk = tlMarkersAll.find(m => m._jugador && m._jugador.n === j.n);
       if (mk) { mapTimeline.setView(mk.getLatLng(), 10); mk.openPopup(); }
     });
-    dotsEl.appendChild(dot);
+    frag.appendChild(dot);
     tlDotEls.push(dot);
   });
+  dotsEl.appendChild(frag);
   tlAnimIntervalMs = Math.min(Math.max(4000 / jugadores.length, 60), 200);
 }
 
@@ -629,7 +702,13 @@ function tlStep() {
   document.getElementById('tl-progress').style.width = `${((i+1)/tlAnimJugadores.length*100).toFixed(1)}%`;
   const isIntl = j.pa !== 'Uruguay';
   const mk = L.marker([j.la, j.lo], { icon: buildBallIcon(j, isIntl) });
-  mk.bindPopup(buildFichaPopup(j), { maxWidth:280, minWidth:260, className:'ficha-popup' });
+  mk.on('click', function() {
+    if (!this._popupBuilt) {
+      this.bindPopup(buildFichaPopup(j), { maxWidth:280, minWidth:260, className:'ficha-popup' });
+      this._popupBuilt = true;
+      this.openPopup();
+    }
+  });
   mk._jugador = j;
   mk.addTo(mapTimeline);
   tlMarkersAll.push(mk);
@@ -648,13 +727,13 @@ function mostrarMiniCard(j) {
   if (tlMiniTimeout) clearTimeout(tlMiniTimeout);
   card.innerHTML = `
     <div class="mc-foto-wrap">
-      ${j.fo ? `<img src="${j.fo}" onerror="this.style.display='none'" alt="">` : '<span>⚽</span>'}
+      ${j.fo ? `<img src="${safeUrl(j.fo)}" loading="lazy" onerror="this.style.display='none'" alt="">` : '<span>⚽</span>'}
     </div>
     <div class="mc-info">
-      <div class="mc-nombre">${j.n}</div>
-      <div class="mc-pos">${j.pos}</div>
-      <div class="mc-fn">${j.fn}</div>
-      <div class="mc-lugar">${j.lu}${j.de?', '+j.de:''}</div>
+      <div class="mc-nombre">${esc(j.n)}</div>
+      <div class="mc-pos">${esc(j.pos)}</div>
+      <div class="mc-fn">${esc(j.fn)}</div>
+      <div class="mc-lugar">${esc(j.lu)}${j.de?', '+esc(j.de):''}</div>
     </div>`;
   card.classList.add('visible');
   tlMiniTimeout = setTimeout(() => card.classList.remove('visible'), 2500);
@@ -670,7 +749,7 @@ function initDashboard() {
   const topNames = JUGADORES.filter(j=>j.m.length===maxM).map(j=>j.n.split(' ').pop()).join(', ');
   document.getElementById('kpi-total').textContent     = JUGADORES.length;
   document.getElementById('kpi-mundiales').textContent = MUNDIALES.length;
-  document.getElementById('kpi-depto-top').textContent = topD ? `${topD[0]} (${topD[1]})` : '–';
+  document.getElementById('kpi-depto-top').textContent = topD ? `${topD[0]} (${topD[1]})` : 'N/D';
   document.getElementById('kpi-extranacidos').textContent = ext;
   document.getElementById('kpi-extranacidos-pct').textContent = Math.round(ext/JUGADORES.length*100)+'%';
   document.getElementById('kpi-campeones').textContent = CAMPEONES.length;
@@ -775,215 +854,85 @@ function renderChartPaisesClubes(jugs) {
 }
 
 /* ══════════════════════════════════════════════════════════
-   PROYECCIÓN 2030
-   ══════════════════════════════════════════════════════════
-
-   MODELO BAYESIANO — justificación y pasos:
-
-   Sea θ_d = "tasa de producción de mundialistas del depto d".
-   Queremos P(θ_d | datos históricos) para proyectarla a 2030.
-
-   Paso 1 — Prior (lo que sabemos antes de ver los últimos mundiales):
-     El GeoJSON tiene el recuento exacto por departamento y por mundial
-     para todos los torneos 1930-2022. Dividimos entre la población del
-     departamento en el censo más cercano a cada mundial para obtener
-     una tasa "jugadores por 100.000 hab." por depto y mundial.
-     El prior es la media de esas tasas históricas (1930-2022).
-
-   Paso 2 — Likelihood (señal reciente):
-     Tomamos solo los últimos 5 mundiales (2002-2022), que son
-     más informativos para 2030 porque reflejan el sistema de
-     formación actual. Calculamos la misma tasa per-cápita reciente.
-
-   Paso 3 — Posterior (combinación bayesiana):
-     θ_posterior = α · θ_prior + (1-α) · θ_likelihood
-     Con α = 0.40 (peso al prior histórico) y (1-α) = 0.60 (peso
-     al likelihood reciente). Esto es un estimador de Bayes empírico
-     (Empirical Bayes) donde los pesos reflejan la incertidumbre:
-     cuanto más reciente, más relevante para 2030.
-
-   Paso 4 — Denominador: población 2030 por departamento
-     Se proyecta SUMANDO la extrapolación lineal de CADA localidad/ciudad
-     del CSV evolucion_pob.csv (tendencia propia por ciudad), y luego
-     se agrega por departamento. Esto es más preciso que extrapolar el
-     total departamental porque captura que, por ejemplo, Maldonado
-     (Punta del Este) crece mucho más rápido que Salto.
-
-   Paso 5 — Score final y distribución de las 26 plazas:
-     score_d = θ_posterior_d * pob2030_d   (jugadores esperados si la tasa se mantiene)
-     Luego renormalizamos: jugadores_est_d = 26 * score_d / Σ score
-*/
-
-const AÑOS_CENSO_POB = [1963,1975,1985,1996,2004,2011,2023];
-
-// Censos más cercanos a cada mundial (para normalizar las tasas históricas)
-const CENSO_CERCANO = {
-  1930:1908, 1950:1963, 1954:1963, 1966:1963,
-  1970:1975, 1974:1975, 1986:1985, 1990:1985,
-  2002:1996, 2010:2011, 2014:2011, 2018:2023, 2022:2023, 2026:2023
-};
+   PROYECCIÓN 2030 — usa proyecciones2030.csv (Germán Botto)
+   Modelo de Germán: Bayes empírico con prior histórico (1930-2026)
+   y verosimilitud reciente (2002-2026), normalizado por pob. 2030 del INE.
+   Resultado: 1 extranjero + 25 uruguayos distribuidos por departamento.
+   ══════════════════════════════════════════════════════════ */
 
 let proyRendered = false;
 function renderProyeccion2030() {
   if (proyRendered) return;
   proyRendered = true;
 
-  if (!window.DEPTOS_GEOJSON) {
+  if (!window.DEPTOS_GEOJSON || !PROY_DATA.length) {
     setTimeout(renderProyeccion2030, 400);
     proyRendered = false;
     return;
   }
 
-  // ─── Paso 4: Población 2030 por depto (suma de tendencias por localidad) ───
-  const pob2030 = proyPob2030PorDepto();
-
-  // ─── Pasos 1-3: Tasas prior y likelihood ───────────────────────────────────
-  const features = window.DEPTOS_GEOJSON.features.filter(f => f.properties.nam !== 'Extranjeros');
-
-  // Obtener población por depto en el censo más cercano a un mundial dado
-  function pobDeptoEnCenso(deptoNam, censAño) {
-    const locs = POB_LOCALIDADES[deptoNam];
-    if (!locs || !locs.length) return null;
-    // Suma de los valores de ese censo en las localidades que lo tienen
-    let total = 0, found = false;
-    locs.forEach(loc => {
-      const pt = loc.serie.find(p => p.año === censAño);
-      if (pt) { total += pt.pob; found = true; }
-    });
-    return found ? total : null;
-  }
-
-  // Construir scores
-  const scores = features.map(feat => {
-    const nm = feat.properties.nam;
-    const props = feat.properties;
-
-    // Prior: tasa media histórica (todos los mundiales en GeoJSON)
-    let sumPrior = 0, cntPrior = 0;
-    MUNDIALES_GEOJSON.forEach(mundial => {
-      const jugadores = typeof props[`Mund_${mundial}`] === 'number' ? props[`Mund_${mundial}`] : 0;
-      const censAño = CENSO_CERCANO[mundial] || 1985;
-      const pob = pobDeptoEnCenso(nm, censAño);
-      if (pob && pob > 0) {
-        sumPrior += (jugadores / (pob / 100000));
-        cntPrior++;
-      }
-    });
-    const tasaPrior = cntPrior ? sumPrior / cntPrior : 0;
-
-    // Likelihood: tasa reciente (2002-2022)
-    let sumLike = 0, cntLike = 0;
-    MUNDIALES_RECIENTES.forEach(mundial => {
-      const jugadores = typeof props[`Mund_${mundial}`] === 'number' ? props[`Mund_${mundial}`] : 0;
-      const censAño = CENSO_CERCANO[mundial] || 2011;
-      const pob = pobDeptoEnCenso(nm, censAño);
-      if (pob && pob > 0) {
-        sumLike += (jugadores / (pob / 100000));
-        cntLike++;
-      }
-    });
-    const tasaLike = cntLike ? sumLike / cntLike : 0;
-
-    // Posterior bayesiano empírico
-    const tasaPosterior = 0.40 * tasaPrior + 0.60 * tasaLike;
-
-    // Recuentos brutos para la tabla
-    const histTotal  = MUNDIALES_GEOJSON.reduce((s,a) => s + (typeof props[`Mund_${a}`]==='number'?props[`Mund_${a}`]:0), 0);
-    const histReciente = MUNDIALES_RECIENTES.reduce((s,a) => s + (typeof props[`Mund_${a}`]==='number'?props[`Mund_${a}`]:0), 0);
-
-    // Población 2030 proyectada
-    const pobProy = pob2030[nm] || 50000;
-
-    // Score: tasa posterior * población proyectada 2030 / 100.000
-    const score = tasaPosterior * (pobProy / 100000);
-
-    return { nm, histTotal, histReciente, pobProy, tasaPrior, tasaLike, tasaPosterior, score };
-  }).filter(d => d.score > 0 || d.histTotal > 0);
-
-  // Normalizar y distribuir 26 plazas
-  const totalScore = scores.reduce((s,d) => s + d.score, 0);
-  scores.forEach(d => {
-    d.prob    = totalScore > 0 ? d.score / totalScore : 0;
-    d.jugEst  = +(d.prob * 26).toFixed(2);
-  });
-  scores.sort((a,b) => b.jugEst - a.jugEst);
-
-  // ─── Tabla ────────────────────────────────────────────────────────────────
+  // Construir tabla con datos del modelo del Dpto. de Geografía
   const tbody = document.getElementById('proy-tbody');
   tbody.innerHTML = '';
-  const maxScore = Math.max(...scores.map(d=>d.score), 0.001);
-  scores.forEach(d => {
-    const barW = Math.round((d.score / maxScore) * 80);
-    const jugDisp = d.jugEst < 0.05 ? '<0.1' : d.jugEst.toFixed(1);
+  const maxCant = Math.max(...PROY_DATA.map(d => d.cant), 0.1);
+
+  // Agregar fila de extranjero al final
+  const extranjero = { nm: 'Extranjeros / Nacidos fuera UY', cantCorreg: 1, cant: 1, pobProy: null, prob: null, propComb: null, rate100k: null, rate100kRec: null };
+  const filas = [...PROY_DATA, extranjero];
+
+  filas.forEach(d => {
+    const barW = d.cant ? Math.round((d.cant / maxCant) * 80) : 0;
+    const jugDisp = d.cantCorreg > 0 ? d.cantCorreg : (d.cant < 0.05 ? '<0.1' : d.cant.toFixed(1));
+    const pobStr = d.pobProy ? `${(d.pobProy/1000).toFixed(0)}k` : 'N/D';
+    const probStr = d.prob !== null ? (d.prob * 100).toFixed(1) + '%' : 'N/D';
+    const propStr = d.propComb !== null ? d.propComb.toFixed(2) : 'N/D';
+    const rateStr = d.rate100k !== null && d.rate100k !== undefined
+      ? `${d.rate100k.toFixed(2)}<span class="rate-sep"> / </span><span class="rate-rec">${d.rate100kRec !== undefined && d.rate100kRec > 0 ? d.rate100kRec.toFixed(2) : '0.00'}</span>`
+      : 'N/D';
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td><b>${d.nm}</b></td>
-      <td>${d.histTotal}</td>
-      <td>${d.histReciente}</td>
-      <td>${(d.pobProy/1000).toFixed(0)}k</td>
+      <td class="rate-cell">${rateStr}</td>
+      <td>${probStr}</td>
+      <td>${pobStr}</td>
       <td>
-        <div class="proy-score-bar" style="width:${barW}px"></div>
-        <span class="proy-score-num">${d.score.toFixed(3)}</span>
+        ${barW > 0 ? `<div class="proy-score-bar" style="width:${barW}px"></div>` : ''}
+        <span class="proy-score-num">${propStr}</span>
       </td>
       <td class="proy-est-val">${jugDisp}</td>`;
     tbody.appendChild(tr);
   });
 
-  // ─── Metodología con texto completo ──────────────────────────────────────
-  // Construir el HTML de metodología con KaTeX
+  // Metodología
   const methodEl = document.getElementById('proy-method-text');
   methodEl.innerHTML = `
-    <b>¿Por qué un modelo bayesiano?</b> En estadística bayesiana, el estimador
-    de un parámetro desconocido (aquí: la tasa de producción de mundialistas
-    de cada departamento) combina dos fuentes de información mediante la regla
-    de Bayes: el <b>conocimiento previo</b> (información histórica acumulada 1930&ndash;2022)
-    y la <b>verosimilitud observada</b> (señal empírica reciente, 2002&ndash;2022).
-    Usar sólo el promedio histórico daría demasiado peso a décadas muy distintas
-    al fútbol actual; usar sólo los datos recientes introduce alta varianza
-    (pocos torneos). Bayes equilibra ambas fuentes de forma principiada.
+    Para cada departamento se calculó cuántos jugadores por cada 100.000 habitantes
+    representaron a Uruguay en cada mundial, usando el censo del INE más cercano a ese año.
+    Se promedian dos períodos: el histórico completo (1930-2026) y el reciente (2002-2026),
+    dándole más peso al reciente porque refleja mejor cómo funciona el fútbol formativo hoy.
+    Ese promedio ponderado se multiplica por la población proyectada de cada departamento
+    al 2030 (proyecciones INE, revisión 2025) para estimar cuántos mundialistas podría
+    aportar cada zona. El resultado distribuye 26 plazas (1 extranjero + 25 uruguayos).
+    La columna <i>Jug./100k hab.</i> muestra las dos tasas: histórica completa / reciente.
 
     <div class="proy-formula-block">
-      <span class="proy-formula-label">Estimador posterior (Bayes empírico)</span>
+      <span class="proy-formula-label">Distribución estimada del plantel 2030</span>
       <div class="proy-formula" id="f1"></div>
       <div class="proy-formula-vars" id="f1v"></div>
     </div>
 
-    <b>Conocimiento previo — 40%.</b>
-    Para cada departamento <i>d</i> y cada mundial <i>t</i> del GeoJSON:
     <div class="proy-formula-block">
+      <span class="proy-formula-label">Tasa por departamento</span>
       <div class="proy-formula" id="f2"></div>
       <div class="proy-formula-vars" id="f2v"></div>
     </div>
 
-    <b>Verosimilitud observada — 60%.</b>
-    Idéntico cálculo restringido a los mundiales 2002&ndash;2022,
-    que reflejan el sistema formativo actual. El mayor peso (60 vs 40) expresa
-    que la señal reciente es más informativa para 2030.
+    <b>Resultado:</b> 1 extranjero y, de los 25 uruguayos restantes: Montevideo (16),
+    Canelones (3), Salto (2), Artigas (1), Colonia (1), Paysandú (1) y Río Negro (1).
 
-    <div class="proy-formula-block">
-      <span class="proy-formula-label">Proyección de población 2030 por localidad</span>
-      <div class="proy-formula" id="f3"></div>
-      <div class="proy-formula-vars" id="f3v"></div>
-    </div>
+    <b>Limitaciones:</b> el modelo no incorpora academias de formación, migración
+    intra-país posterior a 2023 ni la concentración de captación en clubes de la capital.`;
 
-    En lugar de extrapolar el total departamental (que pierde la heterogeneidad interna),
-    se ajusta una regresión lineal a la serie censal propia de cada localidad/ciudad
-    de <code>evolucion_pob.csv</code> (hasta 6 censos: 1963&ndash;2023) y se suma.
-    Así, Punta del Este y Maldonado capital tienen tendencias separadas dentro del
-    mismo departamento.
-
-    <div class="proy-formula-block">
-      <span class="proy-formula-label">Puntuación final y distribución del plantel</span>
-      <div class="proy-formula" id="f4"></div>
-      <div class="proy-formula" id="f5"></div>
-      <div class="proy-formula-vars" id="f5v"></div>
-    </div>
-
-    <b>Limitaciones.</b> El modelo no incorpora academias de formación, migración
-    intra-país posterior a 2023 ni la concentración de captación en clubes de la
-    capital. No considera ciudades/localidades en las que no haya nacido un jugador previamente.`;
-
-  // Renderizar fórmulas con KaTeX una vez que el DOM esté listo
   function renderFormulas() {
     if (typeof katex === 'undefined') { setTimeout(renderFormulas, 200); return; }
     const R = (id, tex, disp) => {
@@ -991,50 +940,30 @@ function renderProyeccion2030() {
       if (el) katex.render(tex, el, { displayMode: disp, throwOnError: false });
     };
     R('f1',
-      '\\hat{\\theta}_d = \\alpha\\,\\bar{\\theta}_{d,\\mathrm{hist}} + (1-\\alpha)\\,\\bar{\\theta}_{d,\\mathrm{rec}}',
+      '\\text{jugadores}_{d}^{\\text{est.}} = 25 \\times \\dfrac{\\text{score}_d}{\\sum_{d^{\\prime}} \\text{score}_{d^{\\prime}}} + 1_{\\text{ext.}}',
       true);
     const el1v = document.getElementById('f1v');
-    if (el1v) el1v.innerHTML = 'donde <span id="ia1"></span> (peso al conocimiento previo histórico), ' +
-      '<span id="ia2"></span> es la tasa media histórica 1930&ndash;2022 y ' +
-      '<span id="ia3"></span> es la tasa media de los últimos 5 mundiales.';
-    katex.render('\\alpha = 0{,}40', document.getElementById('ia1'), {throwOnError:false});
-    katex.render('\\bar{\\theta}_{d,\\mathrm{hist}}', document.getElementById('ia2'), {throwOnError:false});
-    katex.render('\\bar{\\theta}_{d,\\mathrm{rec}}', document.getElementById('ia3'), {throwOnError:false});
+    if (el1v) el1v.innerHTML = 'donde <span id="ia1"></span> es la puntuación del departamento <i>d</i> (tasa ponderada × población 2030), y el extranjero se suma por separado.';
+    if (typeof katex !== 'undefined') katex.render('\\text{score}_d', document.getElementById('ia1'), {throwOnError:false});
 
     R('f2',
-      '\\theta_{d,t} = \\dfrac{J_{d,t}}{P_{d,c(t)} / 100{.}000} \\qquad\\Rightarrow\\qquad \\bar{\\theta}_{d,\\mathrm{hist}} = \\frac{1}{|T|}\\sum_{t\\in T}\\theta_{d,t}',
+      '\\theta_{d,t} = \\dfrac{J_{d,t}}{P_{d,c(t)} / 100{.}000}',
       true);
     const el2v = document.getElementById('f2v');
     if (el2v) el2v.innerHTML =
-      '<span id="ib1"></span> = jugadores del depto. en el mundial <span id="ib2"></span> (dato del GeoJSON); ' +
+      '<span id="ib1"></span> = jugadores del depto. en mundial <span id="ib2"></span>; ' +
       '<span id="ib3"></span> = población en el censo más cercano al año <span id="ib4"></span>.';
-    katex.render('J_{d,t}', document.getElementById('ib1'), {throwOnError:false});
-    katex.render('t', document.getElementById('ib2'), {throwOnError:false});
-    katex.render('P_{d,c(t)}', document.getElementById('ib3'), {throwOnError:false});
-    katex.render('t', document.getElementById('ib4'), {throwOnError:false});
-
-    R('f3',
-      '\\hat{P}_{l,2030} = \\hat{\\beta}_0^{(l)} + \\hat{\\beta}_1^{(l)} \\cdot 2030 \\qquad \\hat{P}_{d,2030} = \\sum_{l\\,\\in\\, d}\\,\\max\\!\\left(\\hat{P}_{l,2030},\\;0{,}8\\cdot P_{l,\\text{últ.}}\\right)',
-      true);
-    const el3v = document.getElementById('f3v');
-    if (el3v) el3v.innerHTML =
-      'donde <span id="ic1"></span> son los coeficientes de mínimos cuadrados sobre la serie censal de la localidad <span id="ic2"></span>.';
-    katex.render('(\\hat{\\beta}_0, \\hat{\\beta}_1)', document.getElementById('ic1'), {throwOnError:false});
-    katex.render('l', document.getElementById('ic2'), {throwOnError:false});
-
-    R('f4',
-      '\\text{score}_d = \\hat{\\theta}_d \\times \\dfrac{\\hat{P}_{d,2030}}{100{.}000}',
-      true);
-    R('f5',
-      '\\text{jugadores}_{d}^{\\text{est.}} = 26 \\times \\dfrac{\\text{score}_d}{\\displaystyle\\sum_{d^{\\prime}} \\text{score}_{d^{\\prime}}}',
-      true);
-    const el5v = document.getElementById('f5v');
-    if (el5v) el5v.innerHTML = 'El score refleja los jugadores esperados si la tasa posterior se mantuviese constante hasta 2030. La renormalización distribuye exactamente 26 plazas.';
+    if (typeof katex !== 'undefined') {
+      katex.render('J_{d,t}', document.getElementById('ib1'), {throwOnError:false});
+      katex.render('t', document.getElementById('ib2'), {throwOnError:false});
+      katex.render('P_{d,c(t)}', document.getElementById('ib3'), {throwOnError:false});
+      katex.render('t', document.getElementById('ib4'), {throwOnError:false});
+    }
   }
   renderFormulas();
 
-  // ─── Mapa Leaflet con polígonos reales del GeoJSON ───────────────────────
-  initProyMap(scores);
+  // Mapa Leaflet con resultados de Germán
+  initProyMap(PROY_DATA);
 }
 
 function initProyMap(scores) {
@@ -1052,7 +981,7 @@ function initProyMap(scores) {
     subdomains:'abcd', maxZoom:18
   }).addTo(mapProy);
 
-  const maxJug = Math.max(...scores.map(d => d.jugEst), 0.1);
+  const maxJug = Math.max(...scores.map(d => d.cantCorreg), 1);
 
   const CENTROIDS = {
     'Montevideo':    [-56.2320, -34.8313],
@@ -1081,7 +1010,7 @@ function initProyMap(scores) {
     style: feat => {
       const nm = feat.properties.nam;
       const s = scores.find(d => d.nm === nm);
-      const t = s ? s.jugEst / maxJug : 0;
+      const t = s ? s.cantCorreg / maxJug : 0;
       const r = Math.round(204 + (10 - 204) * t);
       const g = Math.round(232 + (58 - 232) * t);
       const b2= Math.round(245 + (90 - 245) * t);
@@ -1093,17 +1022,15 @@ function initProyMap(scores) {
     onEachFeature: (feat, layer) => {
       const nm = feat.properties.nam;
       const s = scores.find(d => d.nm === nm);
-      const jugDisp = s ? (s.jugEst < 0.05 ? '<0.1' : s.jugEst.toFixed(1)) : '0';
+      const jugDisp = s && s.cantCorreg > 0 ? s.cantCorreg : '0';
+      const probStr = s && s.prob !== null ? (s.prob * 100).toFixed(1) + '%' : 'N/D';
       layer.bindTooltip(
-        `<b>${nm}</b><br>Jugadores est.: <b>${jugDisp}</b><br>` +
-        `Con. previo: ${s ? s.tasaPrior.toFixed(3) : '0'} jug./100k<br>` +
-        `Verosimilitud: ${s ? s.tasaLike.toFixed(3) : '0'} jug./100k`,
+        `<b>${nm}</b><br>Jugadores est.: <b>${jugDisp}</b><br>Prob. modelo: ${probStr}<br>Pob. 2030 est.: ${s ? (s.pobProy/1000).toFixed(0)+'k' : 'N/D'}`,
         { sticky: true, className: 'proy-tooltip' }
       );
     }
   }).addTo(mapProy);
 
-  // Grupo de etiquetas con toggle
   window._proyLabelLayer = L.layerGroup().addTo(mapProy);
 
   function buildLabels(visible) {
@@ -1112,9 +1039,9 @@ function initProyMap(scores) {
     scores.forEach(d => {
       const ctr = CENTROIDS[d.nm];
       if (!ctr) return;
-      const jugDisp = d.jugEst < 0.05 ? '' : d.jugEst.toFixed(1);
+      const jugDisp = d.cantCorreg > 0 ? String(d.cantCorreg) : '';
       if (!jugDisp) return;
-      const t = d.jugEst / maxJug;
+      const t = d.cantCorreg / maxJug;
       const txtColor = t > 0.55 ? '#fff' : '#0a3a5a';
       const bgColor  = t > 0.55 ? 'rgba(10,58,90,0.68)' : 'rgba(255,255,255,0.78)';
       const isMvd = d.nm === 'Montevideo';
@@ -1131,8 +1058,7 @@ function initProyMap(scores) {
                      <span class="proy-lbl-nm">Mvd.</span>
                      <span class="proy-lbl-val">${jugDisp}</span>
                    </div>`,
-            iconSize: null,
-            iconAnchor: null
+            iconSize: null, iconAnchor: null
           })
         }).addTo(window._proyLabelLayer);
       } else {
@@ -1142,8 +1068,7 @@ function initProyMap(scores) {
             html: `<div class="proy-map-label" style="color:${txtColor};background:${bgColor}">
                      <span class="proy-lbl-val">${jugDisp}</span>
                    </div>`,
-            iconSize: null,
-            iconAnchor: null
+            iconSize: null, iconAnchor: null
           })
         }).addTo(window._proyLabelLayer);
       }
@@ -1152,7 +1077,6 @@ function initProyMap(scores) {
 
   buildLabels(true);
 
-  // Botón toggle etiquetas
   const toggleBtn = document.getElementById('proy-toggle-labels');
   if (toggleBtn) {
     toggleBtn.checked = true;
