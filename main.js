@@ -154,7 +154,7 @@ window.addEventListener('DOMContentLoaded', () => {
     tryFetch(DATA_PATHS);
   });
 
-  const pGeo = fetchWithFallback('jugadores_dptos_mundial_wgs84.geojson').then(r => r.json());
+  const pGeo = fetchWithFallback('deptos_uy_simple.geojson').then(r => r.json());
 
   Promise.all([pJug, pProy, pGeo]).then(([csvJug, csvProy, gj]) => {
     JUGADORES = applyJitter(parseCSV(csvJug));
@@ -447,23 +447,14 @@ function poblarFiltroPosicion() {
 
 /* ── COROPLETA ──────────────────────────────────────────── */
 function getCoropetaVal(props, mundial, posicion) {
-  if (posicion && posicion !== 'todas') {
-    const nombre = (props.nam || '').toLowerCase();
-    return JUGADORES.filter(j =>
-      j.pa === 'Uruguay' && j.de &&
-      j.de.toLowerCase() === nombre &&
-      j.pos === posicion &&
-      (!mundial || j.m.includes(mundial))
-    ).length;
-  }
-  if (!mundial) {
-    return MUNDIALES_GEOJSON.reduce((s,a) => {
-      const v = props[`Mund_${a}`];
-      return s + (typeof v === 'number' ? v : 0);
-    }, 0);
-  }
-  const v = props[`Mund_${mundial}`];
-  return typeof v === 'number' ? v : 0;
+  // Siempre calculado en vivo desde el CSV — el GeoJSON solo tiene polígonos
+  const nombre = (props.nam || '').toLowerCase();
+  return JUGADORES.filter(j =>
+    j.pa === 'Uruguay' && j.de &&
+    j.de.toLowerCase() === nombre &&
+    (!mundial || j.m.includes(mundial)) &&
+    (posicion === 'todas' || !posicion || j.pos === posicion)
+  ).length;
 }
 
 function buildCoropeta(mundial, posicion) {
