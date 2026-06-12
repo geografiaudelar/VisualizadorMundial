@@ -96,7 +96,7 @@ let PROY_DATA = [];          // datos de proyecciones2030.csv (Germán)
 let mapMain = null, mapTimeline = null, mapProy = null;
 let heatLayer = null, markerLayerMain = null, markerLayerIntl = null;
 let tlMarkersAll = [];
-let coropetaLayer = null, coropetaLabelLayer = null, coropetaVisible = false;
+let coropetaLayer = null, coropetaLabelLayer = null, coropetaVisible = true;
 let chartInstances = {};
 let tlSorted = [];
 
@@ -177,6 +177,11 @@ function parseCSV(rows) {
     const mundiales = (r.lista_mundiales || '').split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
     const clubes    = (r.clubes_en_mundiales || '').split(',').map(s => s.trim());
     const paises    = (r.paises_clubes || '').split(',').map(s => s.trim());
+    // Capitanías y goles vienen paralelos a lista_mundiales (un valor por mundial)
+    const capRaw  = (r.capitan || '').split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
+    const golRaw  = (r.goles   || '').split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
+    const cap = mundiales.map((_, i) => capRaw[i] || 0);
+    const gol = mundiales.map((_, i) => golRaw[i] || 0);
     const la = parseFloat(r.Latitud);
     const lo = parseFloat(r.Longitud);
     if (isNaN(la) || isNaN(lo)) return null;
@@ -194,11 +199,38 @@ function parseCSV(rows) {
     if (!depto && (lu.includes('Aires Puros') || lu.includes('Palermo') || lu.includes('Montevideo'))) depto = 'Montevideo';
     return {
       n: r.nombre, pos: r.posicion, m: mundiales, cl: clubes, pc: paises,
+      cap, gol,
       wiki: r.wiki_enlace || null, fn: r.fecha_nacimiento, fechaIso,
       lu, de: depto, pa: r.pais_nacimiento, la, lo,
       fo: r.url_imagen || null, desplazado: false
     };
   }).filter(Boolean);
+}
+
+/* ── Helpers: capitanías y goles totales o por mundial ───── */
+function golesDe(j, mundial) {
+  if (!j.gol) return 0;
+  if (mundial) {
+    const idx = j.m.indexOf(mundial);
+    return idx === -1 ? 0 : (j.gol[idx] || 0);
+  }
+  return j.gol.reduce((a,b)=>a+b, 0);
+}
+function fueCapitan(j, mundial) {
+  if (!j.cap) return false;
+  if (mundial) {
+    const idx = j.m.indexOf(mundial);
+    return idx !== -1 && j.cap[idx] === 1;
+  }
+  return j.cap.some(c => c === 1);
+}
+function cantCapitanias(j, mundial) {
+  if (!j.cap) return 0;
+  if (mundial) {
+    const idx = j.m.indexOf(mundial);
+    return idx === -1 ? 0 : (j.cap[idx] || 0);
+  }
+  return j.cap.reduce((a,b)=>a+b, 0);
 }
 
 /* Parsear proyecciones2030.csv (resultados de Germán) */
@@ -288,7 +320,12 @@ function initMapaPrincipal() {
   L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
     attribution: '&copy; OpenStreetMap &amp; CARTO', subdomains: 'abcd', maxZoom: 18
   }).addTo(mapMain);
+  // Pane dedicado para las etiquetas del coropleta: siempre por encima de los marcadores
+  mapMain.createPane('coropetaLabelPane');
+  mapMain.getPane('coropetaLabelPane').style.zIndex = 650;
+  mapMain.getPane('coropetaLabelPane').style.pointerEvents = 'none';
   buildMarkersMain();
+  buildCoropeta(getFiltroMundial(), getFiltroPosicion());
   document.getElementById('toggle-heatmap').addEventListener('change', e => {
     if (e.target.checked) { if (!heatLayer) buildHeatmap(); else mapMain.addLayer(heatLayer); }
     else if (heatLayer) mapMain.removeLayer(heatLayer);
@@ -308,6 +345,9 @@ function initMapaPrincipal() {
       if (coropetaLayer) mapMain.removeLayer(coropetaLayer);
       if (coropetaLabelLayer) mapMain.removeLayer(coropetaLabelLayer);
     }
+  });
+  document.getElementById('filter-metrica-coropeta').addEventListener('change', () => {
+    if (coropetaVisible) buildCoropeta(getFiltroMundial(), getFiltroPosicion());
   });
   document.getElementById('filter-mundial').addEventListener('change', rebuildMapaDesdeControles);
   document.getElementById('filter-posicion').addEventListener('change', rebuildMapaDesdeControles);
@@ -357,9 +397,19 @@ function buildMarkersMain(filtroMundial, filtroPosicion) {
     (!filtroMundial || j.m.includes(filtroMundial)) &&
     (pos === 'todas' || j.pos === pos)
   );
-  jugs.forEach(j => {
+  // Ordenar para que capitanes y goleadores se dibujen por encima del resto
+  const jugsOrdenados = [...jugs].sort((a, b) => {
+    const da = (fueCapitan(a, filtroMundial) || golesDe(a, filtroMundial) > 0) ? 1 : 0;
+    const db = (fueCapitan(b, filtroMundial) || golesDe(b, filtroMundial) > 0) ? 1 : 0;
+    return da - db;
+  });
+  jugsOrdenados.forEach(j => {
     const isIntl = j.pa !== 'Uruguay';
-    const marker = L.marker([j.la, j.lo], { icon: buildBallIcon(j, isIntl) });
+    const destacado = fueCapitan(j, filtroMundial) || golesDe(j, filtroMundial) > 0;
+    const marker = L.marker([j.la, j.lo], {
+      icon: buildBallIcon(j, isIntl, filtroMundial),
+      zIndexOffset: destacado ? 1000 : 0
+    });
     // Popup cargado de forma lazy al primer click
     marker.on('click', function() {
       if (!this._popupBuilt) {
@@ -380,20 +430,38 @@ function buildMarkersMain(filtroMundial, filtroPosicion) {
       : `${jugs.length} jugadores · todos los mundiales${posLabel}`;
 }
 
-function buildBallIcon(j, isIntl) {
+function buildBallIcon(j, isIntl, filtroMundial) {
   const cls = isIntl ? 'dot-marker dot-marker-intl' : 'dot-marker';
-  return L.divIcon({ className:'', html:`<div class="${cls}"></div>`, iconSize:[11,11], iconAnchor:[5,5], popupAnchor:[0,-8] });
+  const esCap = fueCapitan(j, filtroMundial);
+  const gol = golesDe(j, filtroMundial);
+  const capCls = esCap ? ' dot-marker-capitan' : '';
+  const golBadge = gol > 0 ? `<span class="dot-marker-gol">${gol}</span>` : '';
+  return L.divIcon({
+    className:'', html:`<div class="${cls}${capCls}">${golBadge}</div>`,
+    iconSize:[9,9], iconAnchor:[4,4], popupAnchor:[0,-7]
+  });
 }
 
 function buildFichaPopup(j) {
-  const pills = j.m.map(año => {
+  const pills = j.m.map((año,i) => {
     const es = CAMPEONES.includes(año);
-    return `<span class="popup-pill${es?' campeon':''}">${año}${es?' 🏆':''}</span>`;
+    const esCap = j.cap && j.cap[i] === 1;
+    const golM = j.gol ? (j.gol[i] || 0) : 0;
+    const golBadge = golM > 0 ? `<span class="popup-pill-gol">⚽${golM}</span>` : '';
+    return `<span class="popup-pill${es?' campeon':''}${esCap?' capitan':''}">${año}${es?' 🏆':''}${esCap?' (C)':''}${golBadge}</span>`;
   }).join('');
   const clubes = j.m.map((año,i) => {
     const club = j.cl[Math.min(i, j.cl.length-1)];
     return `<span class="popup-club-item"><span class="popup-club-año">${año}</span> ${esc(club)}</span>`;
   }).join('');
+  const totalCap = cantCapitanias(j);
+  const totalGol = golesDe(j);
+  const resumen = (totalCap > 0 || totalGol > 0)
+    ? `<div class="popup-resumen-row">
+        ${totalCap>0?`<span class="popup-resumen-item">🅒 ${totalCap} capitanía${totalCap!==1?'s':''}</span>`:''}
+        ${totalGol>0?`<span class="popup-resumen-item">⚽ ${totalGol} gol${totalGol!==1?'es':''}</span>`:''}
+       </div>`
+    : '';
   const wiki  = j.wiki ? `<a href="${safeUrl(j.wiki)}" target="_blank" class="popup-wiki-btn">🔗 Wikipedia / AUF</a>` : '';
   const coord = j.desplazado ? `<div class="popup-coord-note">📌 Coord. estimada, basada sólo en lugar de nacimiento</div>` : '';
   const foto  = j.fo
@@ -409,6 +477,7 @@ function buildFichaPopup(j) {
       </div>
     </div>
     <div class="popup-mundiales-row">${pills}</div>
+    ${resumen}
     <div class="popup-clubes-label">Club en el mundial</div>
     <div class="popup-clubes-list">${clubes}</div>
     ${wiki}${coord}
@@ -446,30 +515,45 @@ function poblarFiltroPosicion() {
 }
 
 /* ── COROPLETA ──────────────────────────────────────────── */
-function getCoropetaVal(props, mundial, posicion) {
+function getFiltroMetricaCoropeta() {
+  const el = document.getElementById('filter-metrica-coropeta');
+  return el ? el.value : 'jugadores';
+}
+function getCoropetaVal(props, mundial, posicion, metrica) {
   // Siempre calculado en vivo desde el CSV — el GeoJSON solo tiene polígonos
   const nombre = (props.nam || '').toLowerCase();
-  return JUGADORES.filter(j =>
+  const m = metrica || 'jugadores';
+  const jugs = JUGADORES.filter(j =>
     j.pa === 'Uruguay' && j.de &&
     j.de.toLowerCase() === nombre &&
     (!mundial || j.m.includes(mundial)) &&
     (posicion === 'todas' || !posicion || j.pos === posicion)
-  ).length;
+  );
+  if (m === 'capitanes') {
+    return jugs.reduce((acc, j) => acc + cantCapitanias(j, mundial), 0);
+  }
+  if (m === 'goles') {
+    return jugs.reduce((acc, j) => acc + golesDe(j, mundial), 0);
+  }
+  return jugs.length;
 }
 
 function buildCoropeta(mundial, posicion) {
   if (!window.DEPTOS_GEOJSON) return;
   if (coropetaLayer) { mapMain.removeLayer(coropetaLayer); coropetaLayer = null; }
   const pos = posicion || getFiltroPosicion();
+  const metrica = getFiltroMetricaCoropeta();
   const vals = DEPTOS_GEOJSON.features
     .filter(f => f.properties.nam !== 'Extranjeros')
-    .map(f => getCoropetaVal(f.properties, mundial, pos));
+    .map(f => getCoropetaVal(f.properties, mundial, pos, metrica));
   const maxVal = Math.max(...vals, 1);
+  const etiqueta = metrica === 'capitanes' ? 'capitanía' : (metrica === 'goles' ? 'gol' : 'jugador');
+  const etiquetaPl = metrica === 'capitanes' ? 'capitanías' : (metrica === 'goles' ? 'goles' : 'jugadores');
 
   coropetaLayer = L.geoJSON(DEPTOS_GEOJSON, {
     filter: f => f.properties.nam !== 'Extranjeros',
     style: feat => {
-      const v = getCoropetaVal(feat.properties, mundial, pos);
+      const v = getCoropetaVal(feat.properties, mundial, pos, metrica);
       const t = v / maxVal;
       const r = Math.round(204 + (10 - 204) * t);
       const g = Math.round(232 + (58 - 232) * t);
@@ -480,14 +564,21 @@ function buildCoropeta(mundial, posicion) {
       };
     },
     onEachFeature: (feat, layer) => {
-      const v = getCoropetaVal(feat.properties, mundial, pos);
+      const v = getCoropetaVal(feat.properties, mundial, pos, metrica);
+      const vJug = metrica === 'jugadores' ? v : getCoropetaVal(feat.properties, mundial, pos, 'jugadores');
       const nm = feat.properties.nam || '';
       const totalJugs = mundial
         ? (JUGADORES.filter(j => j.pa === 'Uruguay' && j.m.includes(mundial)).length || 1)
         : (JUGADORES.filter(j => j.pa === 'Uruguay').length || 1);
-      const pct = totalJugs > 0 ? (v / totalJugs * 100).toFixed(1) : '0.0';
+      const pctJug = (vJug / totalJugs * 100).toFixed(1);
+      let extra = '';
+      if (metrica !== 'jugadores') {
+        const totalMetrica = Math.max(vals.reduce((a,b)=>a+b,0), 1);
+        const pctM = (v / totalMetrica * 100).toFixed(1);
+        extra = `<br>${v} ${v===1?etiqueta:etiquetaPl} (${pctM}%)`;
+      }
       layer.bindTooltip(
-        `<b>${nm}</b><br>${v} jugador${v!==1?'es':''} (${pct}%)${mundial?' · '+mundial:' · total'}`,
+        `<b>${nm}</b><br>${vJug} jugador${vJug!==1?'es':''} (${pctJug}%)${extra}${mundial?' · '+mundial:' · total'}`,
         { sticky: true }
       );
     }
@@ -499,8 +590,9 @@ function buildCoropeta(mundial, posicion) {
     DEPTOS_GEOJSON.features
       .filter(f => f.properties.nam !== 'Extranjeros')
       .forEach(feat => {
-        const v = getCoropetaVal(feat.properties, mundial, pos);
-        if (v === 0) return;
+        const v = getCoropetaVal(feat.properties, mundial, pos, metrica);
+        const vJug = metrica === 'jugadores' ? v : getCoropetaVal(feat.properties, mundial, pos, 'jugadores');
+        if (vJug === 0 && v === 0) return;
         const g = feat.geometry;
         const rings = g.type === 'Polygon' ? [g.coordinates[0]] : g.coordinates.map(p=>p[0]);
         const best = rings.reduce((a,b) =>
@@ -511,11 +603,18 @@ function buildCoropeta(mundial, posicion) {
         const totalJ = mundial
           ? (JUGADORES.filter(j => j.pa === 'Uruguay' && j.m.includes(mundial)).length || 1)
           : (JUGADORES.filter(j => j.pa === 'Uruguay').length || 1);
-        const pctLbl = (v / totalJ * 100).toFixed(1) + '%';
+        const pctJugLbl = (vJug / totalJ * 100).toFixed(1) + '%';
+        let extraLbl = '';
+        if (metrica !== 'jugadores') {
+          const totalMetrica = Math.max(vals.reduce((a,b)=>a+b,0), 1);
+          const pctMLbl = (v / totalMetrica * 100).toFixed(1) + '%';
+          extraLbl = `<br><span class="coropeta-lbl-metrica">${v} ${etiquetaPl}<br><span style="font-size:8px;opacity:.75">${pctMLbl}</span></span>`;
+        }
         L.marker([cy, cx], {
+          pane: 'coropetaLabelPane',
           icon: L.divIcon({
             className: 'proy-label-icon',
-            html: `<div class="coropeta-lbl">${v}<br><span style="font-size:8px;opacity:.75">${pctLbl}</span></div>`,
+            html: `<div class="coropeta-lbl">${vJug}<br><span style="font-size:8px;opacity:.75">${pctJugLbl}</span>${extraLbl}</div>`,
             iconSize: null,
             iconAnchor: null
           })
@@ -745,6 +844,23 @@ function initDashboard() {
   document.getElementById('kpi-extranacidos-pct').textContent = Math.round(ext/JUGADORES.length*100)+'%';
   document.getElementById('kpi-campeones').textContent = CAMPEONES.length;
   document.getElementById('kpi-mas-mundiales').textContent = `${maxM} · ${topNames}`;
+
+  // Máximo goleador histórico
+  const goleador = [...JUGADORES].sort((a,b) => golesDe(b) - golesDe(a))[0];
+  const golesTop = goleador ? golesDe(goleador) : 0;
+  document.getElementById('kpi-goleador').textContent =
+    goleador && golesTop > 0 ? `${goleador.n.split(' ').pop()} (${golesTop})` : 'N/D';
+
+  // Departamento con más capitanías acumuladas
+  const capCnt = {};
+  JUGADORES.filter(j => j.pa === 'Uruguay' && j.de).forEach(j => {
+    const c = cantCapitanias(j);
+    if (c > 0) capCnt[j.de] = (capCnt[j.de]||0) + c;
+  });
+  const topCapDepto = Object.entries(capCnt).sort((a,b)=>b[1]-a[1])[0];
+  document.getElementById('kpi-depto-capitanes').textContent =
+    topCapDepto ? `${topCapDepto[0]} (${topCapDepto[1]})` : 'N/D';
+
   document.getElementById('dash-filter-mundial').addEventListener('change', () => { dashRendered = false; renderDashboard(); });
   document.getElementById('dash-filter-posicion').addEventListener('change', () => { dashRendered = false; renderDashboard(); });
 }
@@ -763,11 +879,12 @@ function renderDashboard() {
   if (dashRendered) return;
   dashRendered = true;
   const jugs = getDashJugadores();
-  renderChartPorMundial(jugs);
   renderChartPosiciones(jugs);
   renderChartDeptos(jugs);
   renderChartClubes(jugs);
   renderChartPaisesClubes(jugs);
+  renderChartCapitanesDepto(jugs);
+  renderChartGolesDepto(jugs);
 }
 
 const AZULES = ['#0a3a5a','#155a8a','#1a78b8','#2299d8','#55B5E5','#7fcbee','#a5dbf4','#ccedf9'];
@@ -775,20 +892,6 @@ const AZ_EXT = [...AZULES,...AZULES];
 
 function destroyChart(id) {
   if (chartInstances[id]) { chartInstances[id].destroy(); delete chartInstances[id]; }
-}
-function renderChartPorMundial(jugs) {
-  destroyChart('pm');
-  const labels = MUNDIALES.map(String);
-  const data   = MUNDIALES.map(a => (jugs||JUGADORES).filter(j => j.m.includes(a)).length);
-  const bgC    = MUNDIALES.map(a => CAMPEONES.includes(a) ? '#c8a84b' : '#55B5E5');
-  chartInstances['pm'] = new Chart(document.getElementById('chart-por-mundial'), {
-    type:'bar',
-    data:{ labels, datasets:[{ data, backgroundColor:bgC, borderRadius:4 }] },
-    options:{ responsive:true, maintainAspectRatio:false,
-      plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label: ctx => `${ctx.raw} jugadores${CAMPEONES.includes(MUNDIALES[ctx.dataIndex])?' 🏆':''}` }}},
-      scales:{ x:{ticks:{font:{size:9},color:'#5a7d94'},grid:{display:false}}, y:{ticks:{font:{size:9},color:'#5a7d94'},grid:{color:'#e8f0f5'}} }
-    }
-  });
 }
 function renderChartPosiciones(jugs) {
   destroyChart('pos');
@@ -812,6 +915,44 @@ function renderChartDeptos(jugs) {
     options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false,
       plugins:{legend:{display:false}},
       scales:{ y:{ticks:{font:{size:8.5},color:'#5a7d94'},grid:{display:false}}, x:{ticks:{font:{size:8},color:'#5a7d94'},grid:{color:'#e8f0f5'}} }
+    }
+  });
+}
+function renderChartCapitanesDepto(jugs) {
+  destroyChart('cap');
+  const m = document.getElementById('dash-filter-mundial').value;
+  const mundial = m === 'todos' ? null : parseInt(m);
+  const cnt = {};
+  (jugs||JUGADORES).filter(j => j.pa === 'Uruguay' && j.de).forEach(j => {
+    const c = cantCapitanias(j, mundial);
+    if (c > 0) cnt[j.de] = (cnt[j.de]||0) + c;
+  });
+  const s = Object.entries(cnt).sort((a,b)=>b[1]-a[1]);
+  chartInstances['cap'] = new Chart(document.getElementById('chart-capitanes-depto'), {
+    type:'bar',
+    data:{ labels:s.map(e=>e[0]), datasets:[{ label:'capitanías', data:s.map(e=>e[1]), backgroundColor:'#0a3a5a', borderRadius:3 }] },
+    options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label: ctx => `${ctx.raw} capitanía${ctx.raw!==1?'s':''}` } } },
+      scales:{ y:{ticks:{font:{size:9},color:'#5a7d94'},grid:{display:false}}, x:{ticks:{font:{size:9},color:'#5a7d94'},grid:{color:'#e8f0f5'}} }
+    }
+  });
+}
+function renderChartGolesDepto(jugs) {
+  destroyChart('gol');
+  const m = document.getElementById('dash-filter-mundial').value;
+  const mundial = m === 'todos' ? null : parseInt(m);
+  const cnt = {};
+  (jugs||JUGADORES).filter(j => j.pa === 'Uruguay' && j.de).forEach(j => {
+    const g = golesDe(j, mundial);
+    if (g > 0) cnt[j.de] = (cnt[j.de]||0) + g;
+  });
+  const s = Object.entries(cnt).sort((a,b)=>b[1]-a[1]);
+  chartInstances['gol'] = new Chart(document.getElementById('chart-goles-depto'), {
+    type:'bar',
+    data:{ labels:s.map(e=>e[0]), datasets:[{ label:'goles', data:s.map(e=>e[1]), backgroundColor:'#c8a84b', borderRadius:3 }] },
+    options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label: ctx => `${ctx.raw} gol${ctx.raw!==1?'es':''}` } } },
+      scales:{ y:{ticks:{font:{size:9},color:'#5a7d94'},grid:{display:false}}, x:{ticks:{font:{size:9},color:'#5a7d94'},grid:{color:'#e8f0f5'}} }
     }
   });
 }

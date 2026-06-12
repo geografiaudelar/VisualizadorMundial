@@ -75,9 +75,13 @@ header{
 .status-map{font-size:10px;font-family:'DM Mono',monospace;color:var(--muted);padding-top:8px;border-top:1px solid var(--border);line-height:1.4}
 
 /* DOT MARKER */
-.dot-marker{width:11px;height:11px;border-radius:50%;background:#55B5E5;border:2px solid rgba(255,255,255,.85);box-shadow:0 1px 5px rgba(10,58,90,.35);cursor:pointer;transition:transform .12s,box-shadow .12s}
-.dot-marker:hover{transform:scale(1.5);box-shadow:0 2px 8px rgba(10,58,90,.5)}
+.dot-marker{width:8px;height:8px;border-radius:50%;background:#55B5E5;border:1.5px solid rgba(255,255,255,.85);box-shadow:0 1px 4px rgba(10,58,90,.35);cursor:pointer;transition:transform .12s,box-shadow .12s;position:relative;display:flex;align-items:center;justify-content:center}
+.dot-marker:hover{transform:scale(1.8);box-shadow:0 2px 8px rgba(10,58,90,.5)}
 .dot-marker-intl{background:#f59e0b}
+/* Capitán: anillo azul oscuro alrededor del marcador */
+.dot-marker-capitan{border:1.5px solid #0a3a5a;box-shadow:0 0 0 2px rgba(10,58,90,.35),0 1px 4px rgba(10,58,90,.35)}
+/* Goles: badge numérico amarillo arriba a la derecha */
+.dot-marker-gol{position:absolute;top:-6px;right:-6px;background:#c8a84b;color:#fff;font-family:'DM Mono',monospace;font-size:7.5px;font-weight:700;line-height:1;border-radius:50%;width:11px;height:11px;display:flex;align-items:center;justify-content:center;border:1px solid #fff;box-shadow:0 1px 3px rgba(10,40,70,.3)}
 
 /* POPUP FICHA */
 .ficha-popup .leaflet-popup-content-wrapper{padding:0!important;border-radius:12px!important;border:1px solid var(--border)!important;box-shadow:0 8px 32px rgba(10,58,90,.2)!important;overflow:hidden}
@@ -92,8 +96,12 @@ header{
 .popup-lugar{font-size:10px;color:rgba(85,181,229,.65);margin-bottom:2px}
 .popup-fn{font-size:9.5px;color:rgba(85,181,229,.45);font-family:'DM Mono',monospace}
 .popup-mundiales-row{display:flex;flex-wrap:wrap;gap:3px;padding:8px 14px 0}
-.popup-pill{font-size:9.5px;font-family:'DM Mono',monospace;font-weight:600;background:var(--accent-xdk);color:var(--accent);padding:2px 7px;border-radius:4px}
+.popup-pill{font-size:9.5px;font-family:'DM Mono',monospace;font-weight:600;background:var(--accent-xdk);color:var(--accent);padding:2px 7px;border-radius:4px;display:inline-flex;align-items:center;gap:3px}
 .popup-pill.campeon{background:#3d2a00;color:var(--gold)}
+.popup-pill.capitan{box-shadow:inset 0 0 0 1.5px #55B5E5}
+.popup-pill-gol{background:rgba(255,255,255,.18);border-radius:3px;padding:0 4px;font-size:9px}
+.popup-resumen-row{display:flex;gap:8px;padding:6px 14px 0;flex-wrap:wrap}
+.popup-resumen-item{font-size:10px;font-weight:600;color:var(--accent-xdk);font-family:'DM Mono',monospace;background:var(--border);padding:2px 8px;border-radius:4px}
 .popup-clubes-label{font-size:8.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);padding:8px 14px 3px}
 .popup-clubes-list{display:flex;flex-direction:column;gap:2px;padding:0 14px 8px}
 .popup-club-item{font-size:10.5px;color:var(--text);display:flex;gap:5px;align-items:center}
@@ -159,9 +167,9 @@ header{
 .tl-player-depto{font-size:9px;font-family:'DM Mono',monospace;color:var(--accent-dk);background:#e0f0fa;padding:1px 5px;border-radius:4px;white-space:nowrap;flex-shrink:0}
 
 /* DASHBOARD */
-#view-dashboard{position:absolute;inset:0;display:grid;grid-template-rows:76px 32px 1fr 1fr;gap:var(--gap);padding:var(--gap);overflow:hidden}
+#view-dashboard{position:absolute;inset:0;display:grid;grid-template-rows:auto 32px 1fr 1fr 1fr;gap:var(--gap);padding:var(--gap);overflow:hidden}
 #view-dashboard.hidden{display:none}
-.kpi-row{display:grid;grid-template-columns:repeat(6,1fr);gap:var(--gap)}
+.kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:var(--gap)}
 .kpi-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 14px;display:flex;flex-direction:column;justify-content:center;gap:3px}
 .kpi-label{font-size:9.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
 .kpi-value{font-family:'DM Mono',monospace;font-size:22px;font-weight:500;line-height:1;color:var(--accent-xdk)}
@@ -169,6 +177,7 @@ header{
 .kpi-pct{font-size:12px;color:var(--muted);font-weight:400}
 .chart-row{display:grid;gap:var(--gap);min-height:0}
 .chart-row.row2{grid-template-columns:1.3fr 1fr 1.4fr}
+.chart-row.row2b{grid-template-columns:1fr 1fr}
 .chart-row.row3{grid-template-columns:1fr 1fr 1fr}
 .chart-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px 16px;display:flex;flex-direction:column;gap:10px;min-height:0;overflow:hidden}
 .chart-card-title{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);flex-shrink:0}
@@ -354,7 +363,7 @@ header{
 
   /* ── DASHBOARD ── */
   #view-dashboard {
-    grid-template-rows: auto auto auto auto;
+    grid-template-rows: auto auto auto auto auto;
     overflow: visible;
     padding: var(--gap);
     height: auto;
@@ -366,6 +375,7 @@ header{
   .dash-filters { flex-wrap: wrap; gap: 6px; }
   .dash-filter-sel { flex: 1; min-width: 140px; font-size: 12px; height: 34px; }
   .chart-row.row2,
+  .chart-row.row2b,
   .chart-row.row3 { grid-template-columns: 1fr; gap: 8px; }
   .chart-card { min-height: 240px; padding: 12px; }
 
@@ -392,6 +402,7 @@ header{
   .view-btn { padding: 5px 10px; font-size: 10.5px; }
   .kpi-row { grid-template-columns: repeat(3, 1fr); }
   .chart-row.row2,
+  .chart-row.row2b,
   .chart-row.row3 { grid-template-columns: 1fr 1fr; }
   .timeline-controls { width: 260px; }
 }

@@ -60,10 +60,15 @@
           <span class="dot-label"><span class="dot" style="background:#f59e0b;border-radius:50%"></span>Nacidos fuera UY</span>
         </label>
         <label class="layer-row">
-          <input type="checkbox" id="toggle-coropeta">
+          <input type="checkbox" id="toggle-coropeta" checked>
           <span class="toggle-track"></span>
           <span class="dot-label"><span class="dot" style="background:linear-gradient(135deg,#cce8f5,#0a3a5a);border-radius:2px"></span>Por departamento</span>
         </label>
+        <select id="filter-metrica-coropeta" class="ctrl-select" style="margin-top:6px">
+          <option value="jugadores">Cantidad de jugadores</option>
+          <option value="capitanes">Cantidad de capitanías</option>
+          <option value="goles">Cantidad de goles</option>
+        </select>
       </div>
       <div>
         <div class="ctrl-title">Filtrar por mundial</div>
@@ -134,7 +139,9 @@
       <div class="kpi-card"><div class="kpi-label">Depto. más representado</div><div class="kpi-value kpi-small" id="kpi-depto-top">–</div></div>
       <div class="kpi-card"><div class="kpi-label">Nacidos fuera de UY</div><div class="kpi-value"><span id="kpi-extranacidos">–</span><span class="kpi-pct" id="kpi-extranacidos-pct"></span></div></div>
       <div class="kpi-card"><div class="kpi-label">Campeones del mundo</div><div class="kpi-value" id="kpi-campeones">2</div></div>
-      <div class="kpi-card"><div class="kpi-label">Más mundiales (jugador)</div><div class="kpi-value kpi-small" id="kpi-mas-mundiales">–</div></div>
+      <div class="kpi-card"><div class="kpi-label">Más mundiales (jugador)</div><div class="kpi-value kpi-small" id="kpi-mas-mundiales">·</div></div>
+      <div class="kpi-card"><div class="kpi-label">Máximo goleador</div><div class="kpi-value kpi-small" id="kpi-goleador">·</div></div>
+      <div class="kpi-card"><div class="kpi-label">Depto. con más capitanías</div><div class="kpi-value kpi-small" id="kpi-depto-capitanes">·</div></div>
     </div>
     <div class="dash-filters">
       <div class="dash-filter-label">Filtrar gráficos:</div>
@@ -145,11 +152,7 @@
         <option value="todas">Todas las posiciones</option>
       </select>
     </div>
-    <div class="chart-row row2">
-      <div class="chart-card">
-        <div class="chart-card-title">Jugadores por mundial</div>
-        <div class="chart-wrap"><canvas id="chart-por-mundial"></canvas></div>
-      </div>
+    <div class="chart-row row2b">
       <div class="chart-card">
         <div class="chart-card-title">Posiciones más frecuentes</div>
         <div class="chart-wrap"><canvas id="chart-posiciones"></canvas></div>
@@ -167,6 +170,16 @@
       <div class="chart-card">
         <div class="chart-card-title">Países donde jugaban al momento del mundial</div>
         <div class="chart-wrap"><canvas id="chart-paises-clubes"></canvas></div>
+      </div>
+    </div>
+    <div class="chart-row row2b">
+      <div class="chart-card">
+        <div class="chart-card-title">Capitanías por departamento</div>
+        <div class="chart-wrap"><canvas id="chart-capitanes-depto"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-card-title">Goles por departamento</div>
+        <div class="chart-wrap"><canvas id="chart-goles-depto"></canvas></div>
       </div>
     </div>
   </div>
