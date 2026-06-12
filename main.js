@@ -565,20 +565,21 @@ function buildCoropeta(mundial, posicion) {
     },
     onEachFeature: (feat, layer) => {
       const v = getCoropetaVal(feat.properties, mundial, pos, metrica);
-      const vJug = metrica === 'jugadores' ? v : getCoropetaVal(feat.properties, mundial, pos, 'jugadores');
       const nm = feat.properties.nam || '';
-      const totalJugs = mundial
-        ? (JUGADORES.filter(j => j.pa === 'Uruguay' && j.m.includes(mundial)).length || 1)
-        : (JUGADORES.filter(j => j.pa === 'Uruguay').length || 1);
-      const pctJug = (vJug / totalJugs * 100).toFixed(1);
-      let extra = '';
-      if (metrica !== 'jugadores') {
+      let cuerpo;
+      if (metrica === 'jugadores') {
+        const totalJugs = mundial
+          ? (JUGADORES.filter(j => j.pa === 'Uruguay' && j.m.includes(mundial)).length || 1)
+          : (JUGADORES.filter(j => j.pa === 'Uruguay').length || 1);
+        const pctJug = (v / totalJugs * 100).toFixed(1);
+        cuerpo = `${v} jugador${v!==1?'es':''} (${pctJug}%)`;
+      } else {
         const totalMetrica = Math.max(vals.reduce((a,b)=>a+b,0), 1);
         const pctM = (v / totalMetrica * 100).toFixed(1);
-        extra = `<br>${v} ${v===1?etiqueta:etiquetaPl} (${pctM}%)`;
+        cuerpo = `${v} ${v===1?etiqueta:etiquetaPl} (${pctM}%)`;
       }
       layer.bindTooltip(
-        `<b>${nm}</b><br>${vJug} jugador${vJug!==1?'es':''} (${pctJug}%)${extra}${mundial?' · '+mundial:' · total'}`,
+        `<b>${nm}</b><br>${cuerpo}${mundial?' · '+mundial:' · total'}`,
         { sticky: true }
       );
     }
@@ -591,8 +592,7 @@ function buildCoropeta(mundial, posicion) {
       .filter(f => f.properties.nam !== 'Extranjeros')
       .forEach(feat => {
         const v = getCoropetaVal(feat.properties, mundial, pos, metrica);
-        const vJug = metrica === 'jugadores' ? v : getCoropetaVal(feat.properties, mundial, pos, 'jugadores');
-        if (vJug === 0 && v === 0) return;
+        if (v === 0) return;
         const g = feat.geometry;
         const rings = g.type === 'Polygon' ? [g.coordinates[0]] : g.coordinates.map(p=>p[0]);
         const best = rings.reduce((a,b) =>
@@ -600,21 +600,22 @@ function buildCoropeta(mundial, posicion) {
         );
         const cx = best.reduce((s,c)=>s+c[0],0)/best.length;
         const cy = best.reduce((s,c)=>s+c[1],0)/best.length;
-        const totalJ = mundial
-          ? (JUGADORES.filter(j => j.pa === 'Uruguay' && j.m.includes(mundial)).length || 1)
-          : (JUGADORES.filter(j => j.pa === 'Uruguay').length || 1);
-        const pctJugLbl = (vJug / totalJ * 100).toFixed(1) + '%';
-        let extraLbl = '';
-        if (metrica !== 'jugadores') {
+        let pctLbl;
+        if (metrica === 'jugadores') {
+          const totalJ = mundial
+            ? (JUGADORES.filter(j => j.pa === 'Uruguay' && j.m.includes(mundial)).length || 1)
+            : (JUGADORES.filter(j => j.pa === 'Uruguay').length || 1);
+          pctLbl = (v / totalJ * 100).toFixed(1) + '%';
+        } else {
           const totalMetrica = Math.max(vals.reduce((a,b)=>a+b,0), 1);
-          const pctMLbl = (v / totalMetrica * 100).toFixed(1) + '%';
-          extraLbl = `<br><span class="coropeta-lbl-metrica">${v} ${etiquetaPl}<br><span style="font-size:8px;opacity:.75">${pctMLbl}</span></span>`;
+          pctLbl = (v / totalMetrica * 100).toFixed(1) + '%';
         }
+        const lblTexto = metrica === 'jugadores' ? `${v}` : `${v} ${v===1?etiqueta:etiquetaPl}`;
         L.marker([cy, cx], {
           pane: 'coropetaLabelPane',
           icon: L.divIcon({
             className: 'proy-label-icon',
-            html: `<div class="coropeta-lbl">${vJug}<br><span style="font-size:8px;opacity:.75">${pctJugLbl}</span>${extraLbl}</div>`,
+            html: `<div class="coropeta-lbl">${lblTexto}<br><span style="font-size:8px;opacity:.75">${pctLbl}</span></div>`,
             iconSize: null,
             iconAnchor: null
           })
