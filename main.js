@@ -96,12 +96,20 @@ let PROY_DATA = [];          // datos de proyecciones2030.csv (Germán)
 let mapMain = null, mapTimeline = null, mapProy = null;
 let heatLayer = null, markerLayerMain = null, markerLayerIntl = null;
 let tlMarkersAll = [];
-let coropetaLayer = null, coropetaLabelLayer = null, coropetaVisible = true;
+let coropetaLayer = null, coropetaLabelLayer = null, coropetaVisible = true, limiteContestadoLayer = null;
 let chartInstances = {};
 let tlSorted = [];
 
 /* ── Paths de datos — busca en varias rutas para compatibilidad ── */
 const DATA_PATHS = ['data/', './data/', ''];
+
+/* Normaliza nombres de departamento para comparar sin importar tildes,
+   mayúsculas/minúsculas o espacios extra (ej: "Tacuarembó" vs "TACUAREMBO") */
+function normDepto(s) {
+  return (s || '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase().trim();
+}
 
 async function fetchWithFallback(filename) {
   for (const prefix of DATA_PATHS) {
@@ -344,6 +352,7 @@ function initMapaPrincipal() {
     else {
       if (coropetaLayer) mapMain.removeLayer(coropetaLayer);
       if (coropetaLabelLayer) mapMain.removeLayer(coropetaLabelLayer);
+      if (limiteContestadoLayer) mapMain.removeLayer(limiteContestadoLayer);
     }
   });
   document.getElementById('filter-metrica-coropeta').addEventListener('change', () => {
@@ -521,11 +530,11 @@ function getFiltroMetricaCoropeta() {
 }
 function getCoropetaVal(props, mundial, posicion, metrica) {
   // Siempre calculado en vivo desde el CSV — el GeoJSON solo tiene polígonos
-  const nombre = (props.nam || '').toLowerCase();
+  const nombre = normDepto(props.nam);
   const m = metrica || 'jugadores';
   const jugs = JUGADORES.filter(j =>
     j.pa === 'Uruguay' && j.de &&
-    j.de.toLowerCase() === nombre &&
+    normDepto(j.de) === nombre &&
     (!mundial || j.m.includes(mundial)) &&
     (posicion === 'todas' || !posicion || j.pos === posicion)
   );
@@ -544,14 +553,14 @@ function buildCoropeta(mundial, posicion) {
   const pos = posicion || getFiltroPosicion();
   const metrica = getFiltroMetricaCoropeta();
   const vals = DEPTOS_GEOJSON.features
-    .filter(f => f.properties.nam !== 'Extranjeros')
+    .filter(f => f.properties.nam !== 'LIMITE CONTESTADO')
     .map(f => getCoropetaVal(f.properties, mundial, pos, metrica));
   const maxVal = Math.max(...vals, 1);
   const etiqueta = metrica === 'capitanes' ? 'capitanía' : (metrica === 'goles' ? 'gol' : 'jugador');
   const etiquetaPl = metrica === 'capitanes' ? 'capitanías' : (metrica === 'goles' ? 'goles' : 'jugadores');
 
   coropetaLayer = L.geoJSON(DEPTOS_GEOJSON, {
-    filter: f => f.properties.nam !== 'Extranjeros',
+    filter: f => f.properties.nam !== 'LIMITE CONTESTADO',
     style: feat => {
       const v = getCoropetaVal(feat.properties, mundial, pos, metrica);
       const t = v / maxVal;
@@ -586,10 +595,19 @@ function buildCoropeta(mundial, posicion) {
   });
   if (coropetaVisible) {
     coropetaLayer.addTo(mapMain);
+
+    // Borde del límite contestado: solo la línea, sin relleno, sin datos ni tooltip
+    if (limiteContestadoLayer) { mapMain.removeLayer(limiteContestadoLayer); limiteContestadoLayer = null; }
+    limiteContestadoLayer = L.geoJSON(DEPTOS_GEOJSON, {
+      filter: f => f.properties.nam === 'LIMITE CONTESTADO',
+      style: { fill: false, color: '#2299d8', weight: 1.5, opacity: 0.9 },
+      interactive: false
+    }).addTo(mapMain);
+
     if (coropetaLabelLayer) mapMain.removeLayer(coropetaLabelLayer);
     coropetaLabelLayer = L.layerGroup();
     DEPTOS_GEOJSON.features
-      .filter(f => f.properties.nam !== 'Extranjeros')
+      .filter(f => f.properties.nam !== 'LIMITE CONTESTADO')
       .forEach(feat => {
         const v = getCoropetaVal(feat.properties, mundial, pos, metrica);
         if (v === 0) return;
@@ -1139,10 +1157,10 @@ function initProyMap(scores) {
   };
 
   L.geoJSON(window.DEPTOS_GEOJSON, {
-    filter: f => f.properties.nam !== 'Extranjeros',
+    filter: f => f.properties.nam !== 'LIMITE CONTESTADO',
     style: feat => {
       const nm = feat.properties.nam;
-      const s = scores.find(d => d.nm === nm);
+      const s = scores.find(d => normDepto(d.nm) === normDepto(nm));
       const t = s ? s.cantCorreg / maxJug : 0;
       const r = Math.round(204 + (10 - 204) * t);
       const g = Math.round(232 + (58 - 232) * t);
@@ -1154,7 +1172,7 @@ function initProyMap(scores) {
     },
     onEachFeature: (feat, layer) => {
       const nm = feat.properties.nam;
-      const s = scores.find(d => d.nm === nm);
+      const s = scores.find(d => normDepto(d.nm) === normDepto(nm));
       const jugDisp = s && s.cantCorreg > 0 ? s.cantCorreg : '0';
       const probStr = s && s.prob !== null ? (s.prob * 100).toFixed(1) + '%' : 'N/D';
       layer.bindTooltip(
