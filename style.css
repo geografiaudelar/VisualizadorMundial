@@ -629,3 +629,210 @@ header{
 
 /* Coropleta label con porcentaje */
 .coropeta-lbl { line-height: 1.3; }
+
+/* ── Separador vertical en header ──────────────────────────── */
+.header-divider-v {
+  width: 1px; height: 26px;
+  background: rgba(85,181,229,.22);
+  flex-shrink: 0;
+  margin: 0 6px;
+}
+
+/* ── Grupo de acciones rápidas en header ───────────────────── */
+.header-actions {
+  display: flex; align-items: center; gap: 5px;
+  flex-shrink: 0;
+}
+.header-action-btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 5px 11px; border-radius: 6px;
+  font-size: 10.5px; font-weight: 600;
+  font-family: 'DM Sans', sans-serif;
+  text-decoration: none; cursor: pointer;
+  border: 1px solid transparent;
+  transition: all .15s; line-height: 1;
+  white-space: nowrap;
+}
+/* Botón "Descargá los mapas" */
+.btn-mapas-hist {
+  background: rgba(85,181,229,.12);
+  border-color: rgba(85,181,229,.35);
+  color: var(--accent);
+}
+.btn-mapas-hist:hover {
+  background: rgba(85,181,229,.22);
+  border-color: var(--accent);
+}
+/* Metadatos PDF */
+.header-btn-meta {
+  background: rgba(85,181,229,.08);
+  border-color: rgba(85,181,229,.25);
+  color: rgba(85,181,229,.75);
+}
+.header-btn-meta:hover {
+  background: rgba(85,181,229,.18);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+/* Web */
+.header-btn-web {
+  background: none;
+  border-color: rgba(85,181,229,.2);
+  color: rgba(85,181,229,.6);
+  padding: 5px 9px;
+  font-size: 13px;
+}
+.header-btn-web:hover {
+  background: rgba(85,181,229,.12);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+/* Instagram */
+.header-btn-ig {
+  background: none;
+  border-color: rgba(193,53,132,.25);
+  color: rgba(193,53,132,.7);
+  padding: 5px 9px;
+}
+.header-btn-ig:hover {
+  background: rgba(193,53,132,.12);
+  border-color: rgba(193,53,132,.6);
+  color: #e8a0cc;
+}
+
+/* ── Modal: mapas históricos ───────────────────────────────── */
+.mapas-modal-overlay {
+  position: fixed; inset: 0; z-index: 9000;
+  background: rgba(5,20,35,.82);
+  backdrop-filter: blur(6px);
+  display: flex; align-items: center; justify-content: center;
+  padding: 16px;
+}
+.mapas-modal-overlay.hidden { display: none; }
+
+.mapas-modal {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  width: min(960px, 100%);
+  max-height: 90vh;
+  display: flex; flex-direction: column;
+  box-shadow: 0 24px 80px rgba(0,0,0,.55);
+  overflow: hidden;
+}
+
+.mapas-modal-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 16px 20px 14px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  background: var(--accent-xdk);
+}
+.mapas-modal-title {
+  font-size: 13px; font-weight: 700; color: var(--accent);
+  flex: 1;
+}
+.mapas-modal-sub {
+  font-size: 10px; color: rgba(85,181,229,.6);
+  white-space: nowrap;
+}
+.mapas-modal-close {
+  background: none; border: none; color: rgba(85,181,229,.5);
+  font-size: 16px; cursor: pointer; padding: 2px 6px;
+  border-radius: 6px; transition: all .15s;
+  line-height: 1; flex-shrink: 0;
+}
+.mapas-modal-close:hover { background: rgba(255,255,255,.08); color: var(--accent); }
+
+.mapas-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px;
+  padding: 16px 20px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.mapa-card {
+  position: relative; border-radius: 8px; overflow: hidden;
+  border: 1.5px solid var(--border);
+  cursor: pointer; transition: all .18s;
+  background: var(--bg);
+  aspect-ratio: 4/3;
+  display: flex; align-items: stretch;
+}
+.mapa-card:hover {
+  border-color: var(--accent);
+  box-shadow: 0 4px 20px rgba(85,181,229,.3);
+  transform: translateY(-2px);
+}
+.mapa-card img {
+  width: 100%; height: 100%;
+  object-fit: cover; display: block;
+}
+.mapa-card-label {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  background: linear-gradient(transparent, rgba(5,20,40,.85));
+  padding: 20px 8px 6px;
+  font-size: 12px; font-weight: 700;
+  color: #e8f4fb; text-align: center;
+}
+.mapa-card-dl {
+  position: absolute; top: 6px; right: 6px;
+  background: rgba(85,181,229,.85);
+  color: #0a2a42; border-radius: 5px;
+  font-size: 9px; font-weight: 700;
+  padding: 3px 6px; opacity: 0; transition: opacity .15s;
+  pointer-events: none;
+}
+.mapa-card:hover .mapa-card-dl { opacity: 1; }
+
+.mapas-modal-footer {
+  display: flex; gap: 8px; align-items: center;
+  padding: 12px 20px 14px;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+  background: var(--accent-xdk);
+  flex-wrap: wrap;
+}
+.mapas-footer-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 7px 14px; border-radius: 7px;
+  font-size: 11px; font-weight: 600;
+  font-family: 'DM Sans', sans-serif;
+  text-decoration: none; transition: all .15s;
+  border: 1.5px solid transparent;
+}
+.mapas-btn-pdf {
+  background: rgba(85,181,229,.12);
+  border-color: rgba(85,181,229,.3);
+  color: var(--accent);
+}
+.mapas-btn-pdf:hover { background: rgba(85,181,229,.22); border-color: var(--accent); }
+
+.mapas-btn-web {
+  background: rgba(85,181,229,.12);
+  border-color: rgba(85,181,229,.3);
+  color: var(--accent);
+}
+.mapas-btn-web:hover { background: rgba(85,181,229,.22); border-color: var(--accent); }
+
+.mapas-btn-ig {
+  background: linear-gradient(135deg, rgba(193,53,132,.15), rgba(131,58,180,.15));
+  border-color: rgba(193,53,132,.35);
+  color: #e8a0cc;
+}
+.mapas-btn-ig:hover { background: linear-gradient(135deg, rgba(193,53,132,.25), rgba(131,58,180,.25)); border-color: rgba(193,53,132,.6); }
+
+.mapas-modal-footer { display: none; }
+
+@media (max-width: 600px) {
+  .mapas-grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; padding: 12px; }
+  .mapas-modal-header { padding: 12px 14px 10px; }
+  .mapas-modal-sub { display: none; }
+  .header-divider-v { display: none; }
+  .header-btn-meta span, .header-btn-web span { display: none; }
+  .header-actions { gap: 3px; }
+  .header-action-btn { font-size: 9.5px; padding: 4px 7px; }
+  .btn-mapas-hist { font-size: 9px; }
+}

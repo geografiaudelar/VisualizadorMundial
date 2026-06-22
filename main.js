@@ -1236,3 +1236,100 @@ function initProyMap(scores) {
 
   setTimeout(() => mapProy.invalidateSize(), 200);
 }
+
+/* ─────────────────────────────────────────────────────────────
+   MODAL: Mapas históricos
+   ───────────────────────────────────────────────────────────── */
+(function() {
+  // Años disponibles y extensiones correspondientes
+  const MAPAS = [
+    { año: 1930, ext: 'jpg' },
+    { año: 1950, ext: 'jpg' },
+    { año: 1954, ext: 'jpg' },
+    { año: 1962, ext: 'jpg' },
+    { año: 1966, ext: 'jpg' },
+    { año: 1970, ext: 'jpg' },
+    { año: 1974, ext: 'jpg' },
+    { año: 1986, ext: 'png' },
+    { año: 1990, ext: 'jpg' },
+    { año: 2002, ext: 'jpg' },
+    { año: 2010, ext: 'jpg' },
+    { año: 2014, ext: 'jpg' },
+    { año: 2018, ext: 'jpg' },
+    { año: 2022, ext: 'jpg' },
+    { año: 2026, ext: 'jpg' },
+  ];
+
+  const CARPETA = 'data/mapas_mundial_1930_2026/';
+
+  function buildGrid() {
+    const grid = document.getElementById('mapas-grid');
+    if (!grid || grid.dataset.built) return;
+    grid.dataset.built = '1';
+
+    MAPAS.forEach(({ año, ext }) => {
+      const src = `${CARPETA}${año}.${ext}`;
+
+      const card = document.createElement('div');
+      card.className = 'mapa-card';
+      card.title = `Descargar mapa ${año}`;
+
+      const img = document.createElement('img');
+      img.src = src;
+      img.alt = `Mapa Uruguay Mundial ${año}`;
+      img.loading = 'lazy';
+
+      const label = document.createElement('div');
+      label.className = 'mapa-card-label';
+      label.textContent = año;
+
+      const badge = document.createElement('div');
+      badge.className = 'mapa-card-dl';
+      badge.textContent = '⬇ Descargar';
+
+      card.appendChild(img);
+      card.appendChild(label);
+      card.appendChild(badge);
+
+      // Clic -> descarga directa
+      card.addEventListener('click', () => {
+        const a = document.createElement('a');
+        a.href = src;
+        a.download = `mapa_uruguay_mundial_${año}.${ext}`;
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      });
+
+      grid.appendChild(card);
+    });
+  }
+
+  function openModal() {
+    buildGrid();
+    document.getElementById('modal-mapas').classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeModal() {
+    document.getElementById('modal-mapas').classList.add('hidden');
+    document.body.style.overflow = '';
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    const btnOpen  = document.getElementById('btn-mapas-hist');
+    const btnClose = document.getElementById('btn-close-modal');
+    const overlay  = document.getElementById('modal-mapas');
+
+    if (btnOpen)  btnOpen.addEventListener('click', openModal);
+    if (btnClose) btnClose.addEventListener('click', closeModal);
+    if (overlay)  overlay.addEventListener('click', e => {
+      if (e.target === overlay) closeModal();
+    });
+
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape') closeModal();
+    });
+  });
+})();
