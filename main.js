@@ -53,23 +53,57 @@ function strHash(str) {
   return Math.abs(h);
 }
 function applyJitter(jugadores) {
+  const MIN_M_MVD = 15;     // distancia mínima entre jugadores del mismo grupo en Montevideo
+  const MAX_M_MVD = 200;    // distancia máxima respecto al punto original en Montevideo
+  const MIN_M_RESTO = 5;    // distancia mínima entre jugadores del mismo grupo fuera de Montevideo
+  const MAX_M_RESTO = 50;   // distancia máxima respecto al punto original fuera de Montevideo
+  const METERS_PER_DEG_LAT = 111320;
+  const MAX_INTENTOS = 300; // intentos antes de rendirse y ubicar igual
+
   const groups = {};
   jugadores.forEach(j => {
     const key = `${j.la}_${j.lo}`;
     if (!groups[key]) groups[key] = [];
     groups[key].push(j);
   });
+
+  const posiciones = new Map(); // jugador -> desplazamiento {x, y} en metros
+
+  Object.values(groups).forEach(group => {
+    const isMvd = group[0].de === 'Montevideo';
+    if (group.length === 1 && !isMvd) return; // no necesita jitter
+
+    const MIN_M = isMvd ? MIN_M_MVD : MIN_M_RESTO;
+    const MAX_M = isMvd ? MAX_M_MVD : MAX_M_RESTO;
+
+    const rng = makeRng(strHash(group.map(j => j.n).join('|')));
+    const puestos = [];
+
+    group.forEach(j => {
+      let x, y, ok, intento = 0;
+      do {
+        const angle = rng() * 2 * Math.PI;
+        const dist = MIN_M + rng() * (MAX_M - MIN_M);
+        x = Math.cos(angle) * dist;
+        y = Math.sin(angle) * dist;
+        ok = puestos.every(p => Math.hypot(p.x - x, p.y - y) >= MIN_M);
+        intento++;
+      } while (!ok && intento < MAX_INTENTOS);
+      puestos.push({ x, y });
+      posiciones.set(j, { x, y });
+    });
+  });
+
   return jugadores.map(j => {
     if (j.pa !== 'Uruguay') return { ...j, desplazado: false };
-    const key = `${j.la}_${j.lo}`;
-    const group = groups[key];
-    const isMvd = (j.de === 'Montevideo');
-    if (group.length === 1 && !isMvd) return { ...j, desplazado: false };
-    const maxR = isMvd ? 0.008 : 0.004;
-    const rng = makeRng(strHash(j.n));
-    const angle = rng() * 2 * Math.PI;
-    const r = maxR * (0.3 + rng() * 0.7);
-    return { ...j, la: j.la + Math.sin(angle) * r, lo: j.lo + Math.cos(angle) * r, desplazado: true };
+    const pos = posiciones.get(j);
+    if (!pos) return { ...j, desplazado: false };
+
+    const metersPerDegLon = METERS_PER_DEG_LAT * Math.cos(j.la * Math.PI / 180);
+    const dLat = pos.y / METERS_PER_DEG_LAT;
+    const dLon = pos.x / metersPerDegLon;
+
+    return { ...j, la: j.la + dLat, lo: j.lo + dLon, desplazado: true };
   });
 }
 
