@@ -359,7 +359,7 @@ function initMapaPrincipal() {
     scrollWheelZoom: !isMobile,
     preferCanvas: true   // más rápido para muchos markers
   });
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png?key=cb1_2heu_1_d924d8034b78a0f807ea2871', {
     attribution: '&copy; OpenStreetMap &amp; CARTO', subdomains: 'abcd', maxZoom: 18
   }).addTo(mapMain);
   // Pane dedicado para las etiquetas del coropleta: siempre por encima de los marcadores
@@ -695,7 +695,7 @@ function initTimelineMap() {
     scrollWheelZoom: !isMobileTL,
     preferCanvas: true
   });
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png?key=cb1_2heu_1_d924d8034b78a0f807ea2871', {
     attribution:'', subdomains:'abcd', maxZoom:18
   }).addTo(mapTimeline);
 }
@@ -1162,7 +1162,7 @@ function initProyMap(scores) {
     scrollWheelZoom: false
   });
 
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png', {
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png?key=cb1_2heu_1_d924d8034b78a0f807ea2871', {
     subdomains:'abcd', maxZoom:18
   }).addTo(mapProy);
 
